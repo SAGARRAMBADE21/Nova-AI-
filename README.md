@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1>ARIA — Enterprise AI Assistant</h1>
+<h1>ARIA — Nova AI</h1>
 <h3>Adaptive Retrieval Intelligence Assistant</h3>
 
 <p>
@@ -20,7 +20,7 @@
 
 ## Overview
 
-**ARIA (Adaptive Retrieval Intelligence Assistant)** is a production-grade enterprise AI assistant built for internal operations. It combines:
+**ARIA (Adaptive Retrieval Intelligence Assistant)** is the core AI engine powering **Nova AI** — a production-grade intelligent assistant built for internal operations. It combines:
 
 - **Retrieval-Augmented Generation (RAG)** — Vector, Graph, and Self-Correcting RAG
 - **5-Agent Pipeline** — Orchestrator, Security, Retrieval, Validation & Tool agents
@@ -349,5 +349,5 @@ This project is licensed under the **MIT License**.
 ---
 
 <div align="center">
-<sub>Built by <strong>Sagar Rambade</strong> · ARIA — Enterprise AI Assistant</sub>
+<sub>Built by <strong>Sagar Rambade</strong> · Nova AI</sub>
 </div>
