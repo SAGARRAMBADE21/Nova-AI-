@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Environment & secrets — NEVER commit these
+.env
+*.env
+credentials/
+google_credentials.json
+google_token.json
+
+# Logs & data
+logs/
+*.log
+*.jsonl
+data/chroma/
+data/uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# pyright / type checking
+pyrightconfig.json
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution
+*.whl
+*.tar.gz
