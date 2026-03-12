@@ -1,7 +1,7 @@
 <div align="center">
 
-<h1>ARIA — Nova AI</h1>
-<h3>Adaptive Retrieval Intelligence Assistant</h3>
+<h1>Nova AI</h1>
+<h3>Secure · Agentic · RAG-Powered · Production-Ready</h3>
 
 <p>
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" />
@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" />
 </p>
 
-<p><strong>Secure · Agentic · RAG-Powered · Production-Ready</strong></p>
+
 
 </div>
 
@@ -20,7 +20,7 @@
 
 ## Overview
 
-**ARIA (Adaptive Retrieval Intelligence Assistant)** is the core AI engine powering **Nova AI** — a production-grade intelligent assistant built for internal operations. It combines:
+**Nova AI** is a production-grade intelligent assistant built for internal operations. It combines:
 
 - **Retrieval-Augmented Generation (RAG)** — Vector, Graph, and Self-Correcting RAG
 - **5-Agent Pipeline** — Orchestrator, Security, Retrieval, Validation & Tool agents
@@ -298,7 +298,7 @@ All interactions are automatically logged to `logs/interactions.jsonl` with:
 
 ## HITL (Human-in-the-Loop)
 
-ARIA automatically escalates to a human reviewer when:
+Nova AI automatically escalates to a human reviewer when:
 - Retrieval confidence is **LOW**
 - The query contains high-risk keywords (`salary`, `legal`, `delete`, `bulk`, `financial`)
 - A tool action is irreversible and affects multiple users
