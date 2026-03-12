@@ -1,7 +1,7 @@
 # plugins/__init__.py
 # Convenience imports — everything accessible from `plugins` package directly.
 
-from .base            import BasePlugin, PluginResult, with_retry
+from .base            import BasePlugin, PluginResult, ActionSchema, ParamSpec, with_retry
 from .google_drive    import GoogleDrivePlugin
 from .google_docs     import GoogleDocsPlugin
 from .google_sheets   import GoogleSheetsPlugin
@@ -14,9 +14,13 @@ from .grafana         import GrafanaPlugin
 from .registry        import PluginRegistry
 
 __all__ = [
-    "BasePlugin", "PluginResult", "with_retry",
+    # Base
+    "BasePlugin", "PluginResult", "ActionSchema", "ParamSpec", "with_retry",
+    # Google
     "GoogleDrivePlugin", "GoogleDocsPlugin", "GoogleSheetsPlugin",
     "GoogleCalendarPlugin", "GmailPlugin", "GoogleMeetPlugin",
+    # Third-party
     "SlackPlugin", "NotionPlugin", "GrafanaPlugin",
+    # Registry
     "PluginRegistry",
 ]
