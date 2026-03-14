@@ -67,6 +67,20 @@ class WebScraper:
                 timeout=10,
             )
             response.raise_for_status()
+        except requests.exceptions.SSLError:
+            # Fallback: retry without SSL verification (common on Windows)
+            logger.warning(f"[WebScraper] SSL error, retrying without verification | url={url}")
+            try:
+                response = requests.get(
+                    url,
+                    headers={"User-Agent": USER_AGENT},
+                    timeout=10,
+                    verify=False,
+                )
+                response.raise_for_status()
+            except requests.RequestException as e:
+                logger.error(f"[WebScraper] Fetch error after SSL fallback | url={url} | error={e}")
+                return []
         except requests.RequestException as e:
             logger.error(f"[WebScraper] Fetch error | url={url} | error={e}")
             return []
