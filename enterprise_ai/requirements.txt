@@ -1,7 +1,13 @@
 # ── Core AI ───────────────────────────────────────────────────────────────
 openai>=1.0.0
-chromadb>=0.4.0
 networkx>=3.0
+
+# ── MongoDB Atlas (replaces ChromaDB) ─────────────────────────────────────
+pymongo>=4.6.0
+
+# ── Auth — Clerk JWT verification ─────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+httpx>=0.25.0
 
 # ── Web & HTTP ────────────────────────────────────────────────────────────
 requests>=2.31.0

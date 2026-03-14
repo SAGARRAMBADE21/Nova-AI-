@@ -1,13 +1,12 @@
 """
 data/ingestion.py
-Real-Time Admin Data Ingestion (24/7)
+Real-Time Admin Data Ingestion (24/7) — Multi-tenant aware.
 Supports: PDF, DOCX, XLSX, CSV, TXT, JSON, XML, URLs
-Pipeline: Upload → Lakera Scan → Parse → Chunk → Embed → Graph Update
+Pipeline: Upload → Lakera Scan → Parse → Chunk → Embed (MongoDB Atlas) → Graph Update
 """
 
 import os
 import logging
-import time
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -18,60 +17,81 @@ logger = logging.getLogger(__name__)
 class DataIngestionPipeline:
 
     SUPPORTED_FORMATS = {
-        ".pdf": "_parse_pdf",
+        ".pdf":  "_parse_pdf",
         ".docx": "_parse_docx",
         ".xlsx": "_parse_xlsx",
-        ".csv": "_parse_csv",
-        ".txt": "_parse_text",
+        ".csv":  "_parse_csv",
+        ".txt":  "_parse_text",
         ".json": "_parse_json",
-        ".xml": "_parse_xml",
-        ".md": "_parse_text",
+        ".xml":  "_parse_xml",
+        ".md":   "_parse_text",
     }
 
     def __init__(self, vector_store, knowledge_graph, lakera_guard=None):
-        self.vector_store    = vector_store
+        self.vector_store    = vector_store    # TenantVectorStore (MongoDB Atlas)
         self.knowledge_graph = knowledge_graph
         self.lakera          = lakera_guard
 
     # ── Main entry point ─────────────────────────────────────────────────
 
-    def ingest(self, file_path: str, category: str = "general",
+    def ingest(self, file_path: str,
+               tenant_id: str,
+               category: str    = "general",
                uploaded_by: str = "admin",
-               db: str = "public") -> dict:
+               db_type: str     = "public") -> dict:
         """
         Full ingestion pipeline for a single file.
-        db='public'  → stored in public_knowledge  (visible to all employees)
-        db='private' → stored in private_knowledge (visible to Team Lead, Manager, Admin only)
-        Returns ingestion report.
+
+        tenant_id         — company workspace scope (required)
+        db_type='public'  → visible to all roles
+        db_type='private' → visible to manager, team_lead, admin only
+        Returns ingestion report dict.
         """
         path      = Path(file_path)
         timestamp = datetime.utcnow().isoformat()
 
-        logger.info(f"[Ingestion] Starting | file={path.name} | db={db} | category={category}")
+        logger.info(
+            f"[Ingestion] Starting | tenant={tenant_id} | "
+            f"file={path.name} | db_type={db_type} | category={category}"
+        )
 
         # 1. Parse content
         content = self._parse(path)
         if not content:
-            return {"status": "failed", "reason": "Could not parse file", "file": path.name}
+            return {
+                "status": "failed",
+                "reason": "Could not parse file",
+                "file":   path.name,
+            }
 
         # 2. Lakera Guard scan
         if self.lakera:
-            result = self.lakera.scan_document(content[:2000], path.name, "admin", "ingestion")
+            result = self.lakera.scan_document(
+                content[:2000], path.name, "admin", "ingestion"
+            )
             if result.flagged:
-                logger.warning(f"[Ingestion] Lakera blocked file | file={path.name} | threat={result.threat.value}")
-                return {"status": "blocked", "reason": result.message, "file": path.name}
+                logger.warning(
+                    f"[Ingestion] Lakera blocked | file={path.name} "
+                    f"| threat={result.threat.value}"
+                )
+                return {
+                    "status": "blocked",
+                    "reason": result.message,
+                    "file":   path.name,
+                }
 
         # 3. Chunk
         chunks = self._chunk(content)
 
-        # 4. Embed into correct vector store collection
-        for i, chunk in enumerate(chunks):
+        # 4. Embed + store in MongoDB Atlas (tenant-scoped)
+        for chunk in chunks:
             self.vector_store.add_document(
+                tenant_id = tenant_id,
                 content   = chunk,
                 source    = path.name,
                 timestamp = timestamp,
                 category  = category,
-                db        = db,
+                db_type   = db_type,
             )
 
         # 5. Update knowledge graph
@@ -82,18 +102,25 @@ class DataIngestionPipeline:
             "file":        path.name,
             "chunks":      len(chunks),
             "category":    category,
+            "db_type":     db_type,
+            "tenant_id":   tenant_id,
             "uploaded_by": uploaded_by,
             "timestamp":   timestamp,
         }
         logger.info(f"[Ingestion] Complete | {report}")
         return report
 
-    def ingest_directory(self, directory: str, category: str = "general") -> list[dict]:
+    def ingest_directory(self, directory: str,
+                         tenant_id: str,
+                         category: str = "general",
+                         db_type: str  = "public") -> list[dict]:
         """Ingest all supported files from a directory."""
         reports = []
         for path in Path(directory).iterdir():
             if path.suffix.lower() in self.SUPPORTED_FORMATS:
-                report = self.ingest(str(path), category)
+                report = self.ingest(
+                    str(path), tenant_id, category, db_type=db_type
+                )
                 reports.append(report)
         return reports
 
@@ -108,7 +135,7 @@ class DataIngestionPipeline:
         try:
             return getattr(self, method)(path)
         except Exception as e:
-            logger.error(f"[Ingestion] Parse error | file={path.name} | error={e}")
+            logger.error(f"[Ingestion] Parse error | file={path.name} | {e}")
             return None
 
     def _parse_text(self, path: Path) -> str:
@@ -143,7 +170,9 @@ class DataIngestionPipeline:
             rows = []
             for sheet in wb.worksheets:
                 for row in sheet.iter_rows(values_only=True):
-                    rows.append(" | ".join(str(c) for c in row if c is not None))
+                    rows.append(
+                        " | ".join(str(c) for c in row if c is not None)
+                    )
             return "\n".join(rows)
         except ImportError:
             logger.warning("[Ingestion] openpyxl not installed.")
@@ -169,7 +198,7 @@ class DataIngestionPipeline:
         return soup.get_text(separator="\n", strip=True)
 
     def _chunk(self, content: str, chunk_size: int = 500) -> list[str]:
-        words  = content.split()
+        words = content.split()
         return [
             " ".join(words[i:i + chunk_size])
             for i in range(0, len(words), chunk_size)

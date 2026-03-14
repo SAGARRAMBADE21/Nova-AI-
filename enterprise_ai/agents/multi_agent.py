@@ -1,18 +1,18 @@
 """
 agents/multi_agent.py
-5-Agent System:
+5-Agent System (multi-tenant aware):
   1. OrchestratorAgent  — coordinates all agents
-  2. RetrievalAgent     — RAG + Graph RAG + web scraping
-  3. ValidationAgent    — cross-checks data accuracy
-  4. ToolAgent          — detects + invokes plugins
-  5. SecurityAgent      — enforces RBAC + Lakera Guard
+  2. SecurityAgent      — resolves RBAC db_types for the user's role + tenant
+  3. RetrievalAgent     — MongoDB Atlas Vector Search + Graph RAG + web scraping
+  4. ValidationAgent    — cross-checks data accuracy, triggers HITL
+  5. ToolAgent          — detects + queues plugin actions
 """
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional, Any
+from typing import Optional, List
 from core.rag import SelfCorrectingRAG, RetrievalResult, ConfidenceLevel
-from security.rbac import RBACController, Role, DataCategory
+from security.rbac import RBACController, Role
 
 logger = logging.getLogger(__name__)
 
@@ -21,19 +21,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AgentContext:
-    user_id:             str
-    session_id:          str
-    user_role:           Role
-    query:               str
-    allowed_collections: list[str]            = field(default_factory=list)
-    retrieval:           Optional[RetrievalResult] = None
-    tool_actions:        list[dict]            = field(default_factory=list)
-    validated:           bool                  = False
-    blocked:             bool                  = False
-    block_reason:        str                   = ""
-    hitl_required:       bool                  = False
-    hitl_reason:         str                   = ""
-    final_answer:        str                   = ""
+    user_id:          str
+    session_id:       str
+    user_role:        Role
+    query:            str
+    tenant_id:        str                    = ""     # ← NEW: company workspace scope
+    allowed_db_types: List[str]              = field(default_factory=list)
+    retrieval:        Optional[RetrievalResult] = None
+    tool_actions:     List[dict]             = field(default_factory=list)
+    validated:        bool                   = False
+    blocked:          bool                   = False
+    block_reason:     str                    = ""
+    hitl_required:    bool                   = False
+    hitl_reason:      str                    = ""
+    final_answer:     str                    = ""
 
 
 # ── Agent base ────────────────────────────────────────────────────────────
@@ -49,23 +50,32 @@ class BaseAgent:
 # ── 1. Security Agent ─────────────────────────────────────────────────────
 
 class SecurityAgent(BaseAgent):
-    """Resolves which ChromaDB collections the user can access via dual-DB RBAC."""
+    """
+    Resolves which MongoDB Atlas db_types the user can access via RBAC.
+    Sets ctx.allowed_db_types = ['public'] or ['public', 'private'].
+    """
 
     def __init__(self, rbac: RBACController):
         super().__init__("SecurityAgent")
         self.rbac = rbac
 
     def run(self, ctx: AgentContext) -> AgentContext:
-        logger.info(f"[{self.name}] RBAC check | user={ctx.user_id} | role={ctx.user_role.value}")
-        ctx.allowed_collections = self.rbac.get_allowed_collections(ctx.user_role)
-        logger.info(f"[{self.name}] Allowed collections: {ctx.allowed_collections}")
+        logger.info(
+            f"[{self.name}] RBAC check | user={ctx.user_id} "
+            f"| role={ctx.user_role.value} | tenant={ctx.tenant_id}"
+        )
+        ctx.allowed_db_types = self.rbac.get_allowed_db_types(ctx.user_role)
+        logger.info(f"[{self.name}] Allowed db_types: {ctx.allowed_db_types}")
         return ctx
 
 
 # ── 2. Retrieval Agent ────────────────────────────────────────────────────
 
 class RetrievalAgent(BaseAgent):
-    """Searches allowed vector store collections, knowledge graph, and web scraper."""
+    """
+    Searches MongoDB Atlas (tenant + RBAC filtered) and Knowledge Graph.
+    Falls back to web scraping on low confidence.
+    """
 
     def __init__(self, rag: SelfCorrectingRAG, web_scraper=None):
         super().__init__("RetrievalAgent")
@@ -75,21 +85,32 @@ class RetrievalAgent(BaseAgent):
     def run(self, ctx: AgentContext) -> AgentContext:
         if ctx.blocked:
             return ctx
+
         logger.info(
-            f"[{self.name}] Retrieving | collections={ctx.allowed_collections} | "
-            f"query={ctx.query[:60]}"
+            f"[{self.name}] Retrieving | tenant={ctx.tenant_id} "
+            f"| db_types={ctx.allowed_db_types} | query={ctx.query[:60]}"
         )
-        # Pass RBAC-resolved collections to RAG
-        ctx.retrieval = self.rag.retrieve(ctx.query, collections=ctx.allowed_collections)
+
+        # MongoDB Atlas Vector Search + Graph RAG (tenant-scoped, RBAC filtered)
+        ctx.retrieval = self.rag.retrieve(
+            query            = ctx.query,
+            tenant_id        = ctx.tenant_id,
+            allowed_db_types = ctx.allowed_db_types,
+        )
 
         # Web scraping fallback for low-confidence results
-        if (ctx.retrieval.confidence == ConfidenceLevel.LOW
-                and self.web_scraper):
+        if ctx.retrieval.confidence == ConfidenceLevel.LOW and self.web_scraper:
             logger.info(f"[{self.name}] Low confidence — attempting web scrape")
             scraped = self.web_scraper.scrape(ctx.query)
             if scraped:
                 from core.rag import Chunk
-                ctx.retrieval.chunks.extend(scraped)
+                for s in scraped:
+                    ctx.retrieval.chunks.append(Chunk(
+                        content   = s.content,
+                        source    = s.source,
+                        timestamp = s.timestamp,
+                        score     = s.score,
+                    ))
                 ctx.retrieval.sources.append("web_scraping")
 
         return ctx
@@ -98,7 +119,7 @@ class RetrievalAgent(BaseAgent):
 # ── 3. Validation Agent ───────────────────────────────────────────────────
 
 class ValidationAgent(BaseAgent):
-    """Cross-checks retrieval results. Flags HITL if confidence is low."""
+    """Cross-checks retrieval results. Flags HITL if confidence is LOW."""
 
     HITL_THRESHOLD = ConfidenceLevel.LOW
 
@@ -109,13 +130,16 @@ class ValidationAgent(BaseAgent):
         if ctx.blocked or not ctx.retrieval:
             return ctx
 
-        logger.info(f"[{self.name}] Validating | confidence={ctx.retrieval.confidence.value}")
+        logger.info(
+            f"[{self.name}] Validating | "
+            f"confidence={ctx.retrieval.confidence.value}"
+        )
 
-        # Flag conflicts
         if ctx.retrieval.conflicts:
-            logger.warning(f"[{self.name}] Conflicts detected: {ctx.retrieval.conflicts}")
+            logger.warning(
+                f"[{self.name}] Conflicts: {ctx.retrieval.conflicts}"
+            )
 
-        # Trigger HITL for low confidence
         if ctx.retrieval.confidence == ConfidenceLevel.LOW:
             ctx.hitl_required = True
             ctx.hitl_reason   = (
@@ -136,37 +160,33 @@ class ToolAgent(BaseAgent):
     Maps to registered plugins and queues actions.
     """
 
-    # Trigger → (plugin_name, action)
+    # Trigger keyword → (plugin_name, action)
     TOOL_MAP = {
         # Google Suite
-        "save":              ("google_drive",    "save_file"),
-        "upload":            ("google_drive",    "upload_document"),
-        "share file":        ("google_drive",    "share_folder"),
-        "create doc":        ("google_docs",     "create_document"),
-        "write document":    ("google_docs",     "create_document"),
-        "draft doc":         ("google_docs",     "create_document"),
-        "edit document":     ("google_docs",     "edit_document"),
-        "push data":         ("google_sheets",   "push_data"),
-        "log to sheet":      ("google_sheets",   "update_row"),
-        "update row":        ("google_sheets",   "update_row"),
-        "schedule":          ("google_calendar", "create_event"),
-        "create event":      ("google_calendar", "create_event"),
-        "remind me":         ("google_calendar", "set_reminder"),
-        "send email":        ("gmail",           "send_email"),
-        "draft mail":        ("gmail",           "draft_email"),
-        "email to":          ("gmail",           "send_email"),
-        "meet link":         ("google_meet",     "create_link"),
-        "video call":        ("google_meet",     "schedule_call"),
-        # Dashboard
-        # (Grafana removed)
+        "save":           ("google_drive",    "save_file"),
+        "upload":         ("google_drive",    "upload_document"),
+        "share file":     ("google_drive",    "share_folder"),
+        "create doc":     ("google_docs",     "create_document"),
+        "write document": ("google_docs",     "create_document"),
+        "draft doc":      ("google_docs",     "create_document"),
+        "edit document":  ("google_docs",     "edit_document"),
+        "push data":      ("google_sheets",   "push_data"),
+        "log to sheet":   ("google_sheets",   "update_row"),
+        "update row":     ("google_sheets",   "update_row"),
+        "schedule":       ("google_calendar", "create_event"),
+        "create event":   ("google_calendar", "create_event"),
+        "remind me":      ("google_calendar", "set_reminder"),
+        "send email":     ("gmail",           "send_email"),
+        "draft mail":     ("gmail",           "draft_email"),
+        "email to":       ("gmail",           "send_email"),
+        "meet link":      ("google_meet",     "create_link"),
+        "video call":     ("google_meet",     "schedule_call"),
     }
 
-    # Actions that require user confirmation before execution
-    CONFIRM_REQUIRED = {
-        "gmail", "google_docs"
-    }
+    # Plugins where user must confirm before execution
+    CONFIRM_REQUIRED = {"gmail", "google_docs"}
 
-    # Actions that require HITL
+    # Keywords that always trigger HITL
     HITL_REQUIRED_KEYWORDS = [
         "salary", "approve", "all staff", "delete", "financial",
         "legal", "compliance", "bulk", "all employees",
@@ -185,7 +205,9 @@ class ToolAgent(BaseAgent):
         for trigger, (plugin, action) in self.TOOL_MAP.items():
             if trigger in query_lower:
                 requires_confirm = plugin in self.CONFIRM_REQUIRED
-                requires_hitl    = any(kw in query_lower for kw in self.HITL_REQUIRED_KEYWORDS)
+                requires_hitl    = any(
+                    kw in query_lower for kw in self.HITL_REQUIRED_KEYWORDS
+                )
 
                 detected.append({
                     "plugin":           plugin,
@@ -197,8 +219,12 @@ class ToolAgent(BaseAgent):
 
                 if requires_hitl:
                     ctx.hitl_required = True
-                    ctx.hitl_reason   = f"High-risk action detected: {plugin}.{action}"
-                    logger.info(f"[{self.name}] HITL required: {plugin}.{action}")
+                    ctx.hitl_reason   = (
+                        f"High-risk action detected: {plugin}.{action}"
+                    )
+                    logger.info(
+                        f"[{self.name}] HITL required: {plugin}.{action}"
+                    )
 
                 logger.info(f"[{self.name}] Tool detected: {plugin}.{action}")
 
@@ -209,10 +235,7 @@ class ToolAgent(BaseAgent):
 # ── 5. Orchestrator Agent ─────────────────────────────────────────────────
 
 class OrchestratorAgent(BaseAgent):
-    """
-    Coordinates all agents.
-    Assembles the final unified response.
-    """
+    """Coordinates all agents and assembles the final context string."""
 
     def __init__(self, security: SecurityAgent, retrieval: RetrievalAgent,
                  validation: ValidationAgent, tool: ToolAgent):
@@ -223,9 +246,11 @@ class OrchestratorAgent(BaseAgent):
         self.tool       = tool
 
     def run(self, ctx: AgentContext) -> AgentContext:
-        logger.info(f"[{self.name}] Starting pipeline | user={ctx.user_id}")
+        logger.info(
+            f"[{self.name}] Pipeline start | "
+            f"user={ctx.user_id} | tenant={ctx.tenant_id}"
+        )
 
-        # Run agents in order
         ctx = self.security.run(ctx)
         if ctx.blocked:
             return ctx
@@ -234,19 +259,25 @@ class OrchestratorAgent(BaseAgent):
         ctx = self.validation.run(ctx)
         ctx = self.tool.run(ctx)
 
-        logger.info(f"[{self.name}] Pipeline complete | hitl={ctx.hitl_required} | tools={len(ctx.tool_actions)}")
+        logger.info(
+            f"[{self.name}] Pipeline complete | "
+            f"hitl={ctx.hitl_required} | tools={len(ctx.tool_actions)}"
+        )
         return ctx
 
     def build_context_string(self, ctx: AgentContext) -> str:
-        """Build the context string to inject into the LLM prompt."""
+        """Build the retrieved context string to inject into the LLM prompt."""
         if not ctx.retrieval or not ctx.retrieval.chunks:
             return "No relevant internal data found."
 
         lines = []
-        for chunk in ctx.retrieval.chunks[:6]:  # Top 6 chunks
+        for chunk in ctx.retrieval.chunks[:6]:   # Top 6 chunks
             lines.append(f"[Source: {chunk.source}]\n{chunk.content}\n")
 
         if ctx.retrieval.conflicts:
-            lines.append(f"\n[NOTE: Conflicting data detected from: {', '.join(ctx.retrieval.conflicts)}]")
+            lines.append(
+                f"\n[NOTE: Conflicting data from: "
+                f"{', '.join(ctx.retrieval.conflicts)}]"
+            )
 
         return "\n".join(lines)
