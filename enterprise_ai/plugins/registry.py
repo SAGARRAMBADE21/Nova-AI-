@@ -14,7 +14,6 @@ from .google_sheets   import GoogleSheetsPlugin
 from .google_calendar import GoogleCalendarPlugin
 from .gmail           import GmailPlugin
 from .google_meet     import GoogleMeetPlugin
-from .grafana         import GrafanaPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,6 @@ class PluginRegistry:
             GoogleCalendarPlugin(),
             GmailPlugin(),
             GoogleMeetPlugin(),
-            GrafanaPlugin(),
         ]
         for plugin in plugins:
             self._plugins[plugin.name] = plugin

@@ -156,16 +156,12 @@ class ToolAgent(BaseAgent):
         "meet link":         ("google_meet",     "create_link"),
         "video call":        ("google_meet",     "schedule_call"),
         # Dashboard
-        "dashboard":         ("grafana",         "update_dashboard"),
-        "push metrics":      ("grafana",         "push_metrics"),
-        "update panel":      ("grafana",         "create_panel"),
-        "kpi":               ("grafana",         "update_dashboard"),
-        "analytics":         ("grafana",         "update_dashboard"),
+        # (Grafana removed)
     }
 
     # Actions that require user confirmation before execution
     CONFIRM_REQUIRED = {
-        "gmail", "grafana", "google_docs"
+        "gmail", "google_docs"
     }
 
     # Actions that require HITL

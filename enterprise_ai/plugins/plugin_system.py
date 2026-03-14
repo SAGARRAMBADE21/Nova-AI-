@@ -12,13 +12,11 @@ from .google_sheets   import GoogleSheetsPlugin
 from .google_calendar import GoogleCalendarPlugin
 from .gmail           import GmailPlugin
 from .google_meet     import GoogleMeetPlugin
-from .grafana         import GrafanaPlugin
 from .registry        import PluginRegistry
 
 __all__ = [
     "BasePlugin", "PluginResult", "with_retry",
     "GoogleDrivePlugin", "GoogleDocsPlugin", "GoogleSheetsPlugin",
     "GoogleCalendarPlugin", "GmailPlugin", "GoogleMeetPlugin",
-    "GrafanaPlugin",
     "PluginRegistry",
 ]
