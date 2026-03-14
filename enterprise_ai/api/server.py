@@ -26,9 +26,45 @@ import httpx
 from main import EnterpriseAIAssistant
 from security.rbac import Role
 from security.clerk_auth import verify_clerk_token, ClerkTokenPayload
+from security.nova_jwt  import create_employee_token, verify_employee_token
 
 app       = FastAPI(title="Nova AI — Enterprise Assistant", version="2.0.0")
 assistant = EnterpriseAIAssistant()
+
+# ── Unified auth dependency ───────────────────────────────────────────────
+# Accepts EITHER:
+#   - Clerk JWT   (admin / manager / team_lead — signed by Clerk RS256)
+#   - Nova JWT    (employee — signed by NOVA_JWT_SECRET HS256 via /join)
+
+from fastapi import Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+_bearer = HTTPBearer(auto_error=False)
+
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> ClerkTokenPayload:
+    """
+    Try Nova JWT first (employee path), then Clerk JWT (admin path).
+    Returns a ClerkTokenPayload for both — same interface throughout.
+    """
+    if credentials and credentials.credentials:
+        raw_token = credentials.credentials
+
+        # 1. Try Nova employee JWT (join code + email flow)
+        nova_payload = verify_employee_token(raw_token)
+        if nova_payload:
+            return ClerkTokenPayload(
+                user_id   = nova_payload["email"],
+                org_id    = nova_payload["tenant_id"],
+                org_role  = f"org:{nova_payload['role']}",
+                email     = nova_payload["email"],
+                tenant_id = nova_payload["tenant_id"],
+                role      = nova_payload["role"],
+            )
+
+    # 2. Fall back to Clerk JWT (admin / manager path)
+    return verify_clerk_token(credentials)
 
 
 # ── Request / Response Models ─────────────────────────────────────────────
@@ -120,8 +156,13 @@ async def join_workspace(request: JoinRequest):
         "tenant_id":    company["tenant_id"],
         "role":         user["role"],
         "status":       user["status"],
-        "message":      f"Welcome to {company['company_name']}! "
-                        f"Please sign in with Clerk to continue.",
+        "token":        create_employee_token(
+                            email     = request.email.lower().strip(),
+                            tenant_id = company["tenant_id"],
+                            role      = user["role"],
+                        ),
+        "message": f"Welcome to {company['company_name']}! "
+                   f"Use the token to access Nova AI.",
     }
 
 
@@ -130,7 +171,7 @@ async def join_workspace(request: JoinRequest):
 @app.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    token: ClerkTokenPayload = Depends(verify_clerk_token),
+    token: ClerkTokenPayload = Depends(get_current_user),
 ):
     """
     Send a query to ARIA.
@@ -160,7 +201,7 @@ async def chat(
 @app.post("/ingest")
 async def ingest(
     request: IngestRequest,
-    token: ClerkTokenPayload = Depends(verify_clerk_token),
+    token: ClerkTokenPayload = Depends(get_current_user),
 ):
     """
     Admin-only: ingest a document into the tenant's knowledge base.
@@ -198,7 +239,7 @@ async def ingest(
 @app.post("/invite-user")
 async def invite_user(
     request: InviteUserRequest,
-    token: ClerkTokenPayload = Depends(verify_clerk_token),
+    token: ClerkTokenPayload = Depends(get_current_user),
 ):
     """
     Admin-only: add a user to the company workspace with a role.
@@ -255,7 +296,7 @@ async def invite_user(
 
 @app.get("/users")
 async def list_users(
-    token: ClerkTokenPayload = Depends(verify_clerk_token),
+    token: ClerkTokenPayload = Depends(get_current_user),
 ):
     """Admin-only: list all users in this company workspace."""
     if token.role != "admin":
@@ -270,7 +311,7 @@ async def list_users(
 
 @app.get("/metrics")
 async def metrics(
-    token: ClerkTokenPayload = Depends(verify_clerk_token),
+    token: ClerkTokenPayload = Depends(get_current_user),
 ):
     """LLMOps metrics — scoped to the authenticated tenant."""
     return assistant.get_metrics()

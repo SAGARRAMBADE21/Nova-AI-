@@ -11,7 +11,6 @@ import logging
 import hashlib
 from datetime import datetime
 from typing import Optional, List
-
 from dotenv import load_dotenv
 
 load_dotenv()
