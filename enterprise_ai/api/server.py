@@ -94,8 +94,14 @@ class IngestRequest(BaseModel):
     db_type:   str = "public"  # 'public' or 'private'
 
 class JoinRequest(BaseModel):
-    join_code: str      # unique company code (e.g. 'ACME-XK7P')
-    email:     str      # user's email address
+    join_code: str      # unique company code (e.g. 'ACMEXK7P12')
+    email:     str      # work email
+    password:  str      # user's password
+
+class RegisterRequest(BaseModel):
+    join_code: str      # company join code
+    email:     str      # work email
+    password:  str      # choose a password (first time setup)
 
 
 # ── Public Endpoints ──────────────────────────────────────────────────────
@@ -119,50 +125,96 @@ async def health():
     return {"status": "healthy", "version": "2.0.0"}
 
 
+@app.post("/register")
+async def register(request: RegisterRequest):
+    """
+    First-time account setup for non-admin users (employee / manager / team_lead).
+    Admin must have already added the email via /invite-user.
+
+    Flow:
+      1. Admin invites: POST /invite-user  { email, role }  → status='invited'
+      2. Employee registers: POST /register { join_code, email, password }
+         → sets password, status becomes 'active'
+      3. Employee logs in: POST /join { join_code, email, password } → Nova JWT
+    """
+    email = request.email.lower().strip()
+
+    # 1. Verify join code
+    company = assistant.tenant_manager.get_company_by_code(request.join_code)
+    if not company:
+        raise HTTPException(status_code=404,
+                            detail="Invalid join code.")
+
+    # 2. Check the email was invited
+    user = assistant.tenant_manager.get_user(company["tenant_id"], email)
+    if not user:
+        raise HTTPException(status_code=403,
+                            detail="This email has not been invited. Contact your admin.")
+
+    # 3. Block if already registered
+    if user.get("status") == "active" and user.get("password_hash"):
+        raise HTTPException(status_code=409,
+                            detail="Account already registered. Please use /join to login.")
+
+    # 4. Set password
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400,
+                            detail="Password must be at least 8 characters.")
+
+    assistant.tenant_manager.set_password(company["tenant_id"], email, request.password)
+
+    return {
+        "message": f"Account created for {email} in {company['company_name']}. "
+                   f"You can now login via /join.",
+        "role":    user["role"],
+    }
+
+
 @app.post("/join")
 async def join_workspace(request: JoinRequest):
     """
-    Verify a company join code + email and return workspace info.
-
-    Flow:
-      1. User enters join code + their email on the login page
-      2. This endpoint looks up the company by join code
-      3. Checks if this email has been invited to that workspace
-      4. Returns tenant_id + role so the frontend can route the user
-      After this, the user authenticates via Clerk (SSO) to get a JWT.
+    Login for non-admin users (employee / manager / team_lead).
+    NO Clerk required — uses company join code + email + password.
+    Returns a Nova-signed JWT valid for 12 hours.
     """
+    email = request.email.lower().strip()
+
     # 1. Find company by join code
     company = assistant.tenant_manager.get_company_by_code(request.join_code)
     if not company:
-        raise HTTPException(
-            status_code=404,
-            detail="Invalid join code. Please check with your company admin.",
-        )
+        raise HTTPException(status_code=404,
+                            detail="Invalid join code. Check with your admin.")
 
-    # 2. Check if this email was invited to this workspace
-    user = assistant.tenant_manager.get_user(
-        tenant_id = company["tenant_id"],
-        email     = request.email.lower().strip(),
-    )
+    # 2. Check user is invited / registered
+    user = assistant.tenant_manager.get_user(company["tenant_id"], email)
     if not user:
-        raise HTTPException(
-            status_code=403,
-            detail="This email has not been invited to this workspace. "
-                   "Contact your admin.",
-        )
+        raise HTTPException(status_code=403,
+                            detail="Email not found in this workspace. Contact your admin.")
+
+    # 3. If not yet registered, prompt to register first
+    if user.get("status") == "invited" or not user.get("password_hash"):
+        raise HTTPException(status_code=403,
+                            detail="Account not set up yet. Please register first at /register.")
+
+    # 4. Verify password
+    if not assistant.tenant_manager.verify_user_password(
+        company["tenant_id"], email, request.password
+    ):
+        raise HTTPException(status_code=401,
+                            detail="Incorrect password.")
+
+    # 5. Issue Nova JWT (12h)
+    token = create_employee_token(
+        email     = email,
+        tenant_id = company["tenant_id"],
+        role      = user["role"],
+    )
 
     return {
+        "token":        token,
         "company_name": company["company_name"],
-        "tenant_id":    company["tenant_id"],
         "role":         user["role"],
-        "status":       user["status"],
-        "token":        create_employee_token(
-                            email     = request.email.lower().strip(),
-                            tenant_id = company["tenant_id"],
-                            role      = user["role"],
-                        ),
-        "message": f"Welcome to {company['company_name']}! "
-                   f"Use the token to access Nova AI.",
+        "message":      f"Welcome back to {company['company_name']}!",
     }
 
 

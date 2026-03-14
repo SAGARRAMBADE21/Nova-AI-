@@ -9,6 +9,7 @@ TenantVectorStore — knowledge_vectors collection with Atlas Vector Search
 import os
 import logging
 import hashlib
+import secrets as _secrets
 from datetime import datetime
 from typing import Optional, List
 from dotenv import load_dotenv
@@ -95,6 +96,46 @@ class TenantManager:
 
     def get_company_by_tenant_id(self, tenant_id: str) -> Optional[dict]:
         return self.companies.find_one({"tenant_id": tenant_id}, {"_id": 0})
+
+    # ── Password (for non-admin users) ──────────────────────────────────────
+
+    @staticmethod
+    def _hash_password(password: str) -> str:
+        """PBKDF2-SHA256 password hash (no external deps)."""
+        salt = _secrets.token_hex(16)
+        key  = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), salt.encode(), 200_000
+        )
+        return f"{salt}${key.hex()}"
+
+    @staticmethod
+    def _verify_hash(password: str, hashed: str) -> bool:
+        """Constant-time comparison of PBKDF2 hash."""
+        try:
+            salt, stored_key = hashed.split("$", 1)
+            new_key = hashlib.pbkdf2_hmac(
+                "sha256", password.encode(), salt.encode(), 200_000
+            )
+            return _secrets.compare_digest(new_key.hex(), stored_key)
+        except Exception:
+            return False
+
+    def set_password(self, tenant_id: str, email: str, password: str) -> bool:
+        """Hash and store a password for a user. Returns True if user exists."""
+        hashed = self._hash_password(password)
+        result = self.users.update_one(
+            {"tenant_id": tenant_id, "email": email},
+            {"$set": {"password_hash": hashed, "status": "active"}},
+        )
+        return result.matched_count > 0
+
+    def verify_user_password(self, tenant_id: str,
+                             email: str, password: str) -> bool:
+        """Return True if email+password match for this tenant."""
+        user = self.get_user(tenant_id, email)
+        if not user or "password_hash" not in user:
+            return False
+        return self._verify_hash(password, user["password_hash"])
 
     # ── Users ─────────────────────────────────────────────────────────────
 
