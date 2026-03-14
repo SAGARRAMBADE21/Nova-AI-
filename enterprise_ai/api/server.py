@@ -20,6 +20,8 @@ from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import uvicorn
+import os
+import httpx
 
 from main import EnterpriseAIAssistant
 from security.rbac import Role
@@ -55,6 +57,10 @@ class IngestRequest(BaseModel):
     category:  str = "general"
     db_type:   str = "public"  # 'public' or 'private'
 
+class JoinRequest(BaseModel):
+    join_code: str      # unique company code (e.g. 'ACME-XK7P')
+    email:     str      # user's email address
+
 
 # ── Public Endpoints ──────────────────────────────────────────────────────
 
@@ -75,6 +81,48 @@ async def onboard(request: OnboardRequest):
 @app.get("/health")
 async def health():
     return {"status": "healthy", "version": "2.0.0"}
+
+
+@app.post("/join")
+async def join_workspace(request: JoinRequest):
+    """
+    Verify a company join code + email and return workspace info.
+
+    Flow:
+      1. User enters join code + their email on the login page
+      2. This endpoint looks up the company by join code
+      3. Checks if this email has been invited to that workspace
+      4. Returns tenant_id + role so the frontend can route the user
+      After this, the user authenticates via Clerk (SSO) to get a JWT.
+    """
+    # 1. Find company by join code
+    company = assistant.tenant_manager.get_company_by_code(request.join_code)
+    if not company:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid join code. Please check with your company admin.",
+        )
+
+    # 2. Check if this email was invited to this workspace
+    user = assistant.tenant_manager.get_user(
+        tenant_id = company["tenant_id"],
+        email     = request.email.lower().strip(),
+    )
+    if not user:
+        raise HTTPException(
+            status_code=403,
+            detail="This email has not been invited to this workspace. "
+                   "Contact your admin.",
+        )
+
+    return {
+        "company_name": company["company_name"],
+        "tenant_id":    company["tenant_id"],
+        "role":         user["role"],
+        "status":       user["status"],
+        "message":      f"Welcome to {company['company_name']}! "
+                        f"Please sign in with Clerk to continue.",
+    }
 
 
 # ── Authenticated Endpoints ───────────────────────────────────────────────
@@ -175,6 +223,33 @@ async def invite_user(
         role       = request.role,
         invited_by = token.user_id,
     )
+
+    # Also send Clerk organization invitation (real email)
+    clerk_secret = os.getenv("CLERK_SECRET_KEY", "")
+    if clerk_secret and token.tenant_id.startswith("org_"):
+        try:
+            async with httpx.AsyncClient() as http:
+                resp = await http.post(
+                    f"https://api.clerk.com/v1/organizations/{token.tenant_id}/invitations",
+                    headers={
+                        "Authorization": f"Bearer {clerk_secret}",
+                        "Content-Type":  "application/json",
+                    },
+                    json={
+                        "email_address": request.email,
+                        "role":          f"org:{request.role}",
+                    },
+                    timeout=10,
+                )
+            if resp.status_code in (200, 201):
+                result["clerk_invite"] = "sent"
+            else:
+                result["clerk_invite"] = f"skipped ({resp.status_code})"
+        except Exception as e:
+            result["clerk_invite"] = f"error: {e}"
+    else:
+        result["clerk_invite"] = "skipped (dev mode)"
+
     return result
 
 
