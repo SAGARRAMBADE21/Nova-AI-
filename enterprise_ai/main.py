@@ -24,7 +24,7 @@ from agents.multi_agent     import (
     RetrievalAgent, ValidationAgent, ToolAgent,
 )
 from data.ingestion         import DataIngestionPipeline
-from plugins.plugin_system  import PluginRegistry
+from plugins               import PluginRegistry
 from utils.llmops           import LLMOpsLogger, MetricsCollector, InteractionLog
 from db.mongodb             import get_mongodb_client, TenantManager, TenantVectorStore
 

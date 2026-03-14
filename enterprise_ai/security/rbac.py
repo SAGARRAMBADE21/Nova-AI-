@@ -41,11 +41,6 @@ class RBACController:
         logger.info(f"[RBAC] role={user_role.value} | db_types={db_types}")
         return db_types
 
-    # Backward-compat alias (code previously called get_allowed_collections)
-    def get_allowed_collections(self, user_role: Role) -> List[str]:
-        """Deprecated alias → use get_allowed_db_types()."""
-        return self.get_allowed_db_types(user_role)
-
     def can_access_private(self, user_role: Role) -> bool:
         """Quick check — can this role see private/confidential data?"""
         return "private" in ROLE_DB_ACCESS.get(user_role, [])
