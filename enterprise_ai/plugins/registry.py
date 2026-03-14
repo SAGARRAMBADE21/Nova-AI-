@@ -14,8 +14,6 @@ from .google_sheets   import GoogleSheetsPlugin
 from .google_calendar import GoogleCalendarPlugin
 from .gmail           import GmailPlugin
 from .google_meet     import GoogleMeetPlugin
-from .slack           import SlackPlugin
-from .notion          import NotionPlugin
 from .grafana         import GrafanaPlugin
 
 logger = logging.getLogger(__name__)
@@ -47,8 +45,6 @@ class PluginRegistry:
             GoogleCalendarPlugin(),
             GmailPlugin(),
             GoogleMeetPlugin(),
-            SlackPlugin(),
-            NotionPlugin(),
             GrafanaPlugin(),
         ]
         for plugin in plugins:

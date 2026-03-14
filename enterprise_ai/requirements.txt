@@ -17,8 +17,8 @@ openpyxl>=3.1.0
 google-api-python-client>=2.100.0
 google-auth-httplib2>=0.1.0
 google-auth-oauthlib>=1.1.0
-slack-sdk>=3.23.0
-notion-client>=2.2.0
+# slack-sdk removed: Slack integration removed
+# notion-client removed: Notion integration removed
 # grafana-api removed: grafana.py uses plain `requests` against Grafana REST API directly
 httpx>=0.25.0
 tiktoken>=0.5.0

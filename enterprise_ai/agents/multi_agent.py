@@ -155,14 +155,6 @@ class ToolAgent(BaseAgent):
         "email to":          ("gmail",           "send_email"),
         "meet link":         ("google_meet",     "create_link"),
         "video call":        ("google_meet",     "schedule_call"),
-        # Collaboration
-        "post to slack":     ("slack",           "send_message"),
-        "notify channel":    ("slack",           "post_to_channel"),
-        "send message":      ("slack",           "send_message"),
-        "send to slack":     ("slack",           "send_message"),
-        "create page":       ("notion",          "create_page"),
-        "update notion":     ("notion",          "update_database"),
-        "add to notion":     ("notion",          "add_block"),
         # Dashboard
         "dashboard":         ("grafana",         "update_dashboard"),
         "push metrics":      ("grafana",         "push_metrics"),
@@ -173,7 +165,7 @@ class ToolAgent(BaseAgent):
 
     # Actions that require user confirmation before execution
     CONFIRM_REQUIRED = {
-        "gmail", "slack", "notion", "grafana", "google_docs"
+        "gmail", "grafana", "google_docs"
     }
 
     # Actions that require HITL
