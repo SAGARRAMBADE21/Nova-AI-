@@ -21,18 +21,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AgentContext:
-    user_id:       str
-    session_id:    str
-    user_role:     Role
-    query:         str
-    retrieval:     Optional[RetrievalResult] = None
-    tool_actions:  list[dict]                = field(default_factory=list)
-    validated:     bool                      = False
-    blocked:       bool                      = False
-    block_reason:  str                       = ""
-    hitl_required: bool                      = False
-    hitl_reason:   str                       = ""
-    final_answer:  str                       = ""
+    user_id:             str
+    session_id:          str
+    user_role:           Role
+    query:               str
+    allowed_collections: list[str]            = field(default_factory=list)
+    retrieval:           Optional[RetrievalResult] = None
+    tool_actions:        list[dict]            = field(default_factory=list)
+    validated:           bool                  = False
+    blocked:             bool                  = False
+    block_reason:        str                   = ""
+    hitl_required:       bool                  = False
+    hitl_reason:         str                   = ""
+    final_answer:        str                   = ""
 
 
 # ── Agent base ────────────────────────────────────────────────────────────
@@ -48,26 +49,23 @@ class BaseAgent:
 # ── 1. Security Agent ─────────────────────────────────────────────────────
 
 class SecurityAgent(BaseAgent):
-    """Enforces RBAC. Works alongside Lakera Guard checkpoints."""
+    """Resolves which ChromaDB collections the user can access via dual-DB RBAC."""
 
     def __init__(self, rbac: RBACController):
         super().__init__("SecurityAgent")
         self.rbac = rbac
 
     def run(self, ctx: AgentContext) -> AgentContext:
-        logger.info(f"[{self.name}] Checking access | user={ctx.user_id} | role={ctx.user_role.value}")
-        category = self.rbac.classify_query(ctx.query)
-        if not self.rbac.check_access(ctx.user_role, category):
-            ctx.blocked     = True
-            ctx.block_reason = self.rbac.get_denied_message(ctx.user_role, category)
-            logger.warning(f"[{self.name}] Access blocked | user={ctx.user_id}")
+        logger.info(f"[{self.name}] RBAC check | user={ctx.user_id} | role={ctx.user_role.value}")
+        ctx.allowed_collections = self.rbac.get_allowed_collections(ctx.user_role)
+        logger.info(f"[{self.name}] Allowed collections: {ctx.allowed_collections}")
         return ctx
 
 
 # ── 2. Retrieval Agent ────────────────────────────────────────────────────
 
 class RetrievalAgent(BaseAgent):
-    """Searches vector store, knowledge graph, and web scraper."""
+    """Searches allowed vector store collections, knowledge graph, and web scraper."""
 
     def __init__(self, rag: SelfCorrectingRAG, web_scraper=None):
         super().__init__("RetrievalAgent")
@@ -77,10 +75,14 @@ class RetrievalAgent(BaseAgent):
     def run(self, ctx: AgentContext) -> AgentContext:
         if ctx.blocked:
             return ctx
-        logger.info(f"[{self.name}] Retrieving data | query={ctx.query[:60]}")
-        ctx.retrieval = self.rag.retrieve(ctx.query)
+        logger.info(
+            f"[{self.name}] Retrieving | collections={ctx.allowed_collections} | "
+            f"query={ctx.query[:60]}"
+        )
+        # Pass RBAC-resolved collections to RAG
+        ctx.retrieval = self.rag.retrieve(ctx.query, collections=ctx.allowed_collections)
 
-        # Web scraping fallback
+        # Web scraping fallback for low-confidence results
         if (ctx.retrieval.confidence == ConfidenceLevel.LOW
                 and self.web_scraper):
             logger.info(f"[{self.name}] Low confidence — attempting web scrape")

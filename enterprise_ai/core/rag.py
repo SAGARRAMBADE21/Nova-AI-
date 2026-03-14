@@ -48,61 +48,89 @@ class RetrievalResult:
 # ── Vector Store (ChromaDB) ───────────────────────────────────────────────
 
 class VectorStore:
-    """ChromaDB-backed semantic search over company documents."""
+    """
+    ChromaDB-backed semantic search with dual-database RBAC.
+    public_knowledge  — accessible by all roles (Employees included)
+    private_knowledge — accessible by Team Lead, Manager, Admin only
+    """
+
+    PUBLIC_COLLECTION  = "public_knowledge"
+    PRIVATE_COLLECTION = "private_knowledge"
 
     def __init__(self):
         try:
             import chromadb
             persist_dir = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma")
-            self.client     = chromadb.PersistentClient(path=persist_dir)
-            self.collection = self.client.get_or_create_collection(
-                name="company_knowledge",
-                metadata={"hnsw:space": "cosine"},
-            )
-            logger.info("[VectorStore] ChromaDB initialised.")
+            self.client = chromadb.PersistentClient(path=persist_dir)
+            # Create both collections on startup
+            self._collections = {
+                self.PUBLIC_COLLECTION: self.client.get_or_create_collection(
+                    name=self.PUBLIC_COLLECTION,
+                    metadata={"hnsw:space": "cosine"},
+                ),
+                self.PRIVATE_COLLECTION: self.client.get_or_create_collection(
+                    name=self.PRIVATE_COLLECTION,
+                    metadata={"hnsw:space": "cosine"},
+                ),
+            }
+            logger.info("[VectorStore] ChromaDB initialised with public + private collections.")
         except ImportError:
             logger.warning("[VectorStore] ChromaDB not installed. Using mock store.")
-            self.client     = None
-            self.collection = None
+            self.client       = None
+            self._collections = {}
 
     def add_document(self, content: str, source: str,
-                     timestamp: str, category: str = "general") -> str:
+                     timestamp: str, category: str = "general",
+                     db: str = "public") -> str:
+        """
+        Add a document to either the public or private collection.
+        db='public'  → public_knowledge  (visible to all)
+        db='private' → private_knowledge (visible to Team Lead, Manager, Admin)
+        """
+        collection_name = (
+            self.PRIVATE_COLLECTION if db == "private" else self.PUBLIC_COLLECTION
+        )
+        collection = self._collections.get(collection_name)
         doc_id = hashlib.md5(f"{source}{timestamp}".encode()).hexdigest()
-        if self.collection:
-            self.collection.add(
+        if collection:
+            collection.add(
                 documents=[content],
                 ids=[doc_id],
-                metadatas=[{"source": source, "timestamp": timestamp, "category": category}],
+                metadatas=[{"source": source, "timestamp": timestamp,
+                            "category": category, "db": db}],
             )
-        logger.info(f"[VectorStore] Document added | source={source}")
+        logger.info(f"[VectorStore] Document added | source={source} | db={collection_name}")
         return doc_id
 
-    def search(self, query: str, top_k: int = 5,
-               category_filter: Optional[str] = None) -> list[Chunk]:
-        if not self.collection:
+    def search(self, query: str, collections: list[str], top_k: int = 5) -> list[Chunk]:
+        """
+        Search across a list of collection names and merge results.
+        Pass collections from RBACController.get_allowed_collections(role).
+        """
+        if not self._collections:
             return []
-        where = {"category": category_filter} if category_filter else None
-        try:
-            results = self.collection.query(
-                query_texts=[query],
-                n_results=top_k,
-                where=where,
-            )
-            chunks = []
-            for i, doc in enumerate(results["documents"][0]):
-                meta  = results["metadatas"][0][i]
-                score = 1 - results["distances"][0][i]  # cosine similarity
-                chunks.append(Chunk(
-                    content   = doc,
-                    source    = meta.get("source", "unknown"),
-                    timestamp = meta.get("timestamp", ""),
-                    score     = score,
-                    category  = meta.get("category", "general"),
-                ))
-            return chunks
-        except Exception as e:
-            logger.error(f"[VectorStore] Search error: {e}")
-            return []
+        all_chunks: list[Chunk] = []
+        for name in collections:
+            col = self._collections.get(name)
+            if not col:
+                continue
+            try:
+                results = col.query(query_texts=[query], n_results=top_k)
+                for i, doc in enumerate(results["documents"][0]):
+                    meta  = results["metadatas"][0][i]
+                    score = 1 - results["distances"][0][i]
+                    all_chunks.append(Chunk(
+                        content   = doc,
+                        source    = meta.get("source", "unknown"),
+                        timestamp = meta.get("timestamp", ""),
+                        score     = score,
+                        category  = meta.get("category", "general"),
+                    ))
+            except Exception as e:
+                logger.error(f"[VectorStore] Search error in {name}: {e}")
+        # Sort merged results by relevance score
+        all_chunks.sort(key=lambda c: c.score, reverse=True)
+        return all_chunks[:top_k]
 
 
 # ── Knowledge Graph (NetworkX) ────────────────────────────────────────────
@@ -172,12 +200,19 @@ class SelfCorrectingRAG:
         self.vector_store    = vector_store
         self.knowledge_graph = knowledge_graph
 
-    def retrieve(self, query: str, top_k: int = 5,
-                 attempt: int = 0) -> RetrievalResult:
-        logger.info(f"[SelfCorrectingRAG] Retrieval attempt {attempt + 1} | query={query[:60]}")
+    def retrieve(self, query: str, collections: list[str],
+                 top_k: int = 5, attempt: int = 0) -> RetrievalResult:
+        """
+        Retrieve from allowed collections only (enforces dual-DB RBAC).
+        collections comes from RBACController.get_allowed_collections(user_role).
+        """
+        logger.info(
+            f"[SelfCorrectingRAG] Attempt {attempt + 1} | "
+            f"collections={collections} | query={query[:60]}"
+        )
 
-        # 1. Vector search
-        chunks = self.vector_store.search(query, top_k=top_k)
+        # 1. Vector search (role-filtered)
+        chunks = self.vector_store.search(query, collections=collections, top_k=top_k)
 
         # 2. Graph RAG
         graph_results = self.knowledge_graph.query(query)
@@ -204,10 +239,9 @@ class SelfCorrectingRAG:
         reframed = None
         if confidence == ConfidenceLevel.LOW and attempt < self.MAX_REFRAME_ATTEMPTS:
             reframed = self._reframe_query(query)
-            # Only recurse if the reframing actually changed the query
             if reframed and reframed != query:
                 logger.info(f"[SelfCorrectingRAG] Reframing query: {reframed}")
-                return self.retrieve(reframed, top_k, attempt + 1)
+                return self.retrieve(reframed, collections, top_k, attempt + 1)
             else:
                 logger.info("[SelfCorrectingRAG] Reframe produced no change, stopping early.")
                 reframed = None

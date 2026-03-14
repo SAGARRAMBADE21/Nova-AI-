@@ -1,66 +1,48 @@
 """
 security/rbac.py
-Role-Based Access Control
-General Data  → all authenticated employees
-Confidential  → authorised roles only
+Role-Based Access Control — Dual Vector Database approach
+  DB 1 (public_knowledge)  → accessible by ALL roles
+  DB 2 (private_knowledge) → accessible by TEAM_LEAD, MANAGER, ADMIN only
 """
 
 from enum import Enum
-from typing import Set
+from typing import List
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class Role(Enum):
-    EMPLOYEE   = "employee"
-    TEAM_LEAD  = "team_lead"
-    MANAGER    = "manager"
-    ADMIN      = "admin"
+    EMPLOYEE  = "employee"
+    TEAM_LEAD = "team_lead"
+    MANAGER   = "manager"
+    ADMIN     = "admin"
 
 
-class DataCategory(Enum):
-    GENERAL      = "general"
-    CONFIDENTIAL = "confidential"
-
-
-# Role → allowed data categories
-ROLE_PERMISSIONS: dict[Role, Set[DataCategory]] = {
-    Role.EMPLOYEE:  {DataCategory.GENERAL},
-    Role.TEAM_LEAD: {DataCategory.GENERAL, DataCategory.CONFIDENTIAL},
-    Role.MANAGER:   {DataCategory.GENERAL, DataCategory.CONFIDENTIAL},
-    Role.ADMIN:     {DataCategory.GENERAL, DataCategory.CONFIDENTIAL},
+# Which ChromaDB collections each role can query
+ROLE_DB_ACCESS: dict[Role, List[str]] = {
+    Role.EMPLOYEE:  ["public_knowledge"],
+    Role.TEAM_LEAD: ["public_knowledge", "private_knowledge"],
+    Role.MANAGER:   ["public_knowledge", "private_knowledge"],
+    Role.ADMIN:     ["public_knowledge", "private_knowledge"],
 }
-
-# Confidential data keywords — trigger access check
-CONFIDENTIAL_KEYWORDS = [
-    "salary", "payroll", "financial", "revenue", "hr", "personnel",
-    "strategic", "confidential", "private", "restricted", "budget",
-    "acquisition", "merger", "legal", "compliance",
-]
 
 
 class RBACController:
 
-    def check_access(self, user_role: Role, category: DataCategory) -> bool:
-        allowed = ROLE_PERMISSIONS.get(user_role, set())
-        granted = category in allowed
-        if not granted:
-            logger.warning(f"[RBAC] Access denied | role={user_role.value} | category={category.value}")
-        return granted
+    def get_allowed_collections(self, user_role: Role) -> List[str]:
+        """Return the list of ChromaDB collections the role can query."""
+        collections = ROLE_DB_ACCESS.get(user_role, ["public_knowledge"])
+        logger.info(f"[RBAC] role={user_role.value} | collections={collections}")
+        return collections
 
-    def classify_query(self, query: str) -> DataCategory:
-        """Determine if a query touches confidential data."""
-        q = query.lower()
-        for keyword in CONFIDENTIAL_KEYWORDS:
-            if keyword in q:
-                logger.info(f"[RBAC] Confidential keyword detected: '{keyword}'")
-                return DataCategory.CONFIDENTIAL
-        return DataCategory.GENERAL
+    def can_access_private(self, user_role: Role) -> bool:
+        """Quick check — can this role see private/company data?"""
+        return "private_knowledge" in ROLE_DB_ACCESS.get(user_role, [])
 
-    def get_denied_message(self, user_role: Role, category: DataCategory) -> str:
+    def get_denied_message(self, user_role: Role) -> str:
         return (
-            f"Access denied. Your role ({user_role.value}) does not have permission "
-            f"to access {category.value} data. "
-            f"Please contact your manager or system administrator."
+            f"Access denied. Your role ({user_role.value}) can only access the public "
+            f"knowledge base. Please contact your manager or administrator for access "
+            f"to internal company data."
         )

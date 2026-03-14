@@ -36,15 +36,18 @@ class DataIngestionPipeline:
     # ── Main entry point ─────────────────────────────────────────────────
 
     def ingest(self, file_path: str, category: str = "general",
-               uploaded_by: str = "admin") -> dict:
+               uploaded_by: str = "admin",
+               db: str = "public") -> dict:
         """
         Full ingestion pipeline for a single file.
+        db='public'  → stored in public_knowledge  (visible to all employees)
+        db='private' → stored in private_knowledge (visible to Team Lead, Manager, Admin only)
         Returns ingestion report.
         """
         path      = Path(file_path)
         timestamp = datetime.utcnow().isoformat()
 
-        logger.info(f"[Ingestion] Starting | file={path.name} | category={category}")
+        logger.info(f"[Ingestion] Starting | file={path.name} | db={db} | category={category}")
 
         # 1. Parse content
         content = self._parse(path)
@@ -61,13 +64,14 @@ class DataIngestionPipeline:
         # 3. Chunk
         chunks = self._chunk(content)
 
-        # 4. Embed into vector store
+        # 4. Embed into correct vector store collection
         for i, chunk in enumerate(chunks):
             self.vector_store.add_document(
                 content   = chunk,
                 source    = path.name,
                 timestamp = timestamp,
                 category  = category,
+                db        = db,
             )
 
         # 5. Update knowledge graph
