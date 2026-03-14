@@ -114,8 +114,14 @@ class SelfCorrectingRAG:
     RELEVANCE_THRESHOLD  = 0.5
     MAX_REFRAME_ATTEMPTS = 3
 
-    def __init__(self, vector_store, knowledge_graph: KnowledgeGraph):
-        self.vector_store    = vector_store    # TenantVectorStore instance
+    def __init__(self, public_store, private_store,
+                 knowledge_graph: KnowledgeGraph):
+        """
+        public_store  — TenantVectorStore on nova_ai database          (all roles)
+        private_store — TenantVectorStore on nova_ai_confidential db   (manager+ only)
+        """
+        self.public_store    = public_store
+        self.private_store   = private_store
         self.knowledge_graph = knowledge_graph
 
     def retrieve(self, query: str,
@@ -124,10 +130,12 @@ class SelfCorrectingRAG:
                  top_k: int = 5,
                  attempt: int = 0) -> RetrievalResult:
         """
-        Retrieve documents from MongoDB Atlas for the given tenant.
+        Retrieve documents across the correct physical databases.
 
-        tenant_id        — company/workspace scope
-        allowed_db_types — ['public'] or ['public','private'] from RBAC
+        Employees   → only public_store  (nova_ai) is queried
+        Managers+   → public_store + private_store (nova_ai_confidential) queried
+
+        The confidential database is NEVER touched for employee-role queries.
         """
         logger.info(
             f"[SelfCorrectingRAG] Attempt {attempt + 1} | "
@@ -135,13 +143,37 @@ class SelfCorrectingRAG:
             f"query={query[:60]}"
         )
 
-        # 1. MongoDB Atlas Vector Search (tenant + RBAC filtered)
-        raw = self.vector_store.search(
+        raw: list[dict] = []
+
+        # 1a. Always search public database (nova_ai)
+        public_results = self.public_store.search(
             tenant_id        = tenant_id,
             query            = query,
-            allowed_db_types = allowed_db_types,
+            allowed_db_types = ["public"],
             top_k            = top_k,
         )
+        raw.extend(public_results)
+        logger.info(
+            f"[SelfCorrectingRAG] Public DB hits: {len(public_results)}"
+        )
+
+        # 1b. Search confidential database ONLY if role allows (manager / admin)
+        if "private" in allowed_db_types:
+            private_results = self.private_store.search(
+                tenant_id        = tenant_id,
+                query            = query,
+                allowed_db_types = ["private"],
+                top_k            = top_k,
+            )
+            raw.extend(private_results)
+            logger.info(
+                f"[SelfCorrectingRAG] Confidential DB hits: {len(private_results)}"
+            )
+        else:
+            logger.info(
+                "[SelfCorrectingRAG] Confidential DB SKIPPED — role not permitted."
+            )
+
         chunks: List[Chunk] = [
             Chunk(
                 content   = r["content"],

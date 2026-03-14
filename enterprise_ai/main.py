@@ -147,9 +147,21 @@ class EnterpriseAIAssistant:
             self.openai = None
 
         # ── MongoDB Atlas ─────────────────────────────────────────────────
-        self._mongo_client, self._db = get_mongodb_client()
-        self.tenant_manager  = TenantManager(self._db)
-        self.vector_store    = TenantVectorStore(self._db, self.openai)
+        # Two physically separate databases for true data isolation
+        self._mongo_client, public_db = get_mongodb_client()
+        confidential_db_name = os.getenv(
+            "MONGODB_CONFIDENTIAL_DB_NAME", "nova_ai_confidential"
+        )
+        confidential_db = self._mongo_client[confidential_db_name]
+
+        self.tenant_manager  = TenantManager(public_db)          # metadata always in public DB
+        self.public_store    = TenantVectorStore(public_db, self.openai)          # nova_ai
+        self.private_store   = TenantVectorStore(confidential_db, self.openai)   # nova_ai_confidential
+
+        logger.info(
+            f"[Assistant] DBs: public=nova_ai | "
+            f"confidential={confidential_db_name}"
+        )
 
         # ── Security ──────────────────────────────────────────────────────
         self.lakera          = LakeraGuard()
@@ -157,12 +169,15 @@ class EnterpriseAIAssistant:
 
         # ── Core ──────────────────────────────────────────────────────────
         self.knowledge_graph = KnowledgeGraph()
-        self.rag             = SelfCorrectingRAG(self.vector_store, self.knowledge_graph)
+        self.rag             = SelfCorrectingRAG(
+            self.public_store, self.private_store, self.knowledge_graph
+        )
         self.web_scraper     = WebScraper(lakera_guard=self.lakera)
         self.hitl            = HITLController()
         self.plugins         = PluginRegistry()
         self.ingestion       = DataIngestionPipeline(
-            self.vector_store, self.knowledge_graph, self.lakera
+            self.public_store, self.private_store,
+            self.knowledge_graph, self.lakera
         )
 
         # ── Agents ────────────────────────────────────────────────────────

@@ -27,8 +27,14 @@ class DataIngestionPipeline:
         ".md":   "_parse_text",
     }
 
-    def __init__(self, vector_store, knowledge_graph, lakera_guard=None):
-        self.vector_store    = vector_store    # TenantVectorStore (MongoDB Atlas)
+    def __init__(self, public_store, private_store,
+                 knowledge_graph, lakera_guard=None):
+        """
+        public_store  → nova_ai database           (db_type='public')
+        private_store → nova_ai_confidential db    (db_type='private')
+        """
+        self.public_store    = public_store
+        self.private_store   = private_store
         self.knowledge_graph = knowledge_graph
         self.lakera          = lakera_guard
 
@@ -83,9 +89,14 @@ class DataIngestionPipeline:
         # 3. Chunk
         chunks = self._chunk(content)
 
-        # 4. Embed + store in MongoDB Atlas (tenant-scoped)
+        # 4. Route to correct physical database based on db_type
+        store = self.public_store if db_type == "public" else self.private_store
+        db_label = "nova_ai" if db_type == "public" else "nova_ai_confidential"
+        logger.info(
+            f"[Ingestion] Routing to {db_label} | db_type={db_type}"
+        )
         for chunk in chunks:
-            self.vector_store.add_document(
+            store.add_document(
                 tenant_id = tenant_id,
                 content   = chunk,
                 source    = path.name,
