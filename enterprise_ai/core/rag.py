@@ -204,8 +204,13 @@ class SelfCorrectingRAG:
         reframed = None
         if confidence == ConfidenceLevel.LOW and attempt < self.MAX_REFRAME_ATTEMPTS:
             reframed = self._reframe_query(query)
-            logger.info(f"[SelfCorrectingRAG] Reframing query: {reframed}")
-            return self.retrieve(reframed, top_k, attempt + 1)
+            # Only recurse if the reframing actually changed the query
+            if reframed and reframed != query:
+                logger.info(f"[SelfCorrectingRAG] Reframing query: {reframed}")
+                return self.retrieve(reframed, top_k, attempt + 1)
+            else:
+                logger.info("[SelfCorrectingRAG] Reframe produced no change, stopping early.")
+                reframed = None
 
         sources = list({c.source for c in relevant})
         return RetrievalResult(
@@ -240,7 +245,9 @@ class SelfCorrectingRAG:
         return ConfidenceLevel.LOW
 
     def _reframe_query(self, query: str) -> str:
-        """Simplify query for better retrieval."""
+        """Simplify query for better retrieval. Returns original if no improvement possible."""
         stop_words = {"the", "a", "an", "is", "are", "was", "were", "what", "how", "who"}
         words      = [w for w in query.split() if w.lower() not in stop_words]
-        return " ".join(words[:8])
+        reframed   = " ".join(words[:8])
+        # Return original query if reframing strips too much content
+        return reframed if reframed and len(reframed) >= 3 else query

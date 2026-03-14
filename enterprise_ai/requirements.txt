@@ -10,7 +10,7 @@ python-dotenv>=1.0.0
 fastapi>=0.104.0
 uvicorn>=0.24.0
 pydantic>=2.0.0
-prometheus-client>=0.19.0
+prometheus-client>=0.19.0  # Used for future Grafana/Prometheus metrics export
 PyPDF2>=3.0.0
 python-docx>=1.0.0
 openpyxl>=3.1.0
@@ -19,7 +19,7 @@ google-auth-httplib2>=0.1.0
 google-auth-oauthlib>=1.1.0
 slack-sdk>=3.23.0
 notion-client>=2.2.0
-grafana-api>=1.0.3
+# grafana-api removed: grafana.py uses plain `requests` against Grafana REST API directly
 httpx>=0.25.0
 tiktoken>=0.5.0
 numpy>=1.24.0

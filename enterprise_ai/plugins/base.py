@@ -204,7 +204,7 @@ class BasePlugin(ABC):
         from google.auth.transport.requests import Request
 
         token_file = os.getenv("GOOGLE_TOKEN_FILE", "")
-        if not token_file or not __import__('os').path.exists(token_file):
+        if not token_file or not os.path.exists(token_file):
             return None
         creds = Credentials.from_authorized_user_file(token_file)
         if creds and creds.expired and creds.refresh_token:

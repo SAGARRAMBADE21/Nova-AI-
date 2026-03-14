@@ -11,7 +11,6 @@ import logging
 from typing import Optional
 from dotenv import load_dotenv
 from openai import OpenAI
-
 from security.lakera_guard import LakeraGuard
 from security.rbac import RBACController, Role
 from core.rag import VectorStore, KnowledgeGraph, SelfCorrectingRAG, ConfidenceLevel
