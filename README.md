@@ -1,353 +1,362 @@
-<div align="center">
+# Nova AI — Enterprise AI Assistant (ARIA)
 
-<h1>Nova AI</h1>
-<h3>Secure · Agentic · RAG-Powered · Production-Ready</h3>
+> **Adaptive Retrieval Intelligence Assistant** — A secure, multi-tenant enterprise AI platform powered by GPT-4, MongoDB Atlas Vector Search, and role-based password authentication.
 
-<p>
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" />
-  <img src="https://img.shields.io/badge/OpenAI-GPT--4-412991?style=for-the-badge&logo=openai" />
-  <img src="https://img.shields.io/badge/FastAPI-REST%20API-009688?style=for-the-badge&logo=fastapi" />
-  <img src="https://img.shields.io/badge/ChromaDB-Vector%20DB-orange?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/LangChain-RAG-1C3C3C?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" />
-</p>
-
-
-
-</div>
+[![Python](https://img.shields.io/badge/Python-3.11+-blue?style=for-the-badge&logo=python)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb)](https://cloud.mongodb.com)
+[![OpenAI](https://img.shields.io/badge/GPT--4-OpenAI-412991?style=for-the-badge&logo=openai)](https://openai.com)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ---
 
-## Overview
+## 🌟 What is Nova AI?
 
-**Nova AI** is a production-grade intelligent assistant built for internal operations. It combines:
+Nova AI is a **production-ready enterprise AI assistant** that gives companies their own private, isolated AI workspace. Each company's data is completely separated from others. Employees get an AI assistant that answers only from **their company's own documents** — with strict role-based access so sensitive data stays protected.
 
-- **Retrieval-Augmented Generation (RAG)** — Vector, Graph, and Self-Correcting RAG
-- **5-Agent Pipeline** — Orchestrator, Security, Retrieval, Validation & Tool agents
-- **Multi-Layer Security** — Lakera Guard AI firewall + RBAC access control
-- **9 Live Integrations** — Google Workspace, Slack, Notion, Grafana & more
-- **Human-in-the-Loop (HITL)** — Automated escalation for sensitive decisions
-- **Full LLMOps Observability** — Interaction logging, metrics, and audit trails
-
-> **Powered by:** OpenAI GPT-4 · ChromaDB · LangChain · FastAPI · Lakera Guard
+**Key differentiator:** Unlike generic AI tools (ChatGPT, Copilot), Nova AI is scoped entirely to your company. Confidential documents are physically stored in a separate database — employees can never access them.
 
 ---
 
-## Quick Start
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                         COMPANY WORKSPACE                            │
+├──────────────────────┬───────────────────────────────────────────────┤
+│   EMPLOYEE           │   MANAGER / TEAM LEAD / ADMIN                 │
+│                      │                                               │
+│  join_code+email+pw  │   join_code+email+pw  (Nova JWT)              │
+│         │            │              │                                 │
+│  ┌──────▼────────────▼──────────────▼──────────────────────┐        │
+│  │        FastAPI  —  Nova JWT auth (HS256)                 │        │
+│  │       (tenant_id + role extracted from token)            │        │
+│  └───────────────────────────┬──────────────────────────────┘        │
+│                              │                                        │
+│  ┌───────────────────────────▼──────────────────────────────┐        │
+│  │              5-Agent Pipeline                             │        │
+│  │  Security → Retrieval → Validation → Tool → GPT-4        │        │
+│  └──────┬────────────────────────────────────────┬──────────┘        │
+│         │                                        │                   │
+│  ┌──────▼──────────┐                  ┌──────────▼────────────┐      │
+│  │  nova_ai (DB)   │                  │ nova_ai_confidential  │      │
+│  │  Public Docs    │                  │   Private Docs        │      │
+│  │  (All roles)    │                  │  (Manager+ only)      │      │
+│  └─────────────────┘                  └───────────────────────┘      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| **LLM** | OpenAI GPT-4 | Natural language responses |
+| **Embeddings** | `text-embedding-3-small` | 1536-dim semantic vectors |
+| **Vector DB** | MongoDB Atlas Vector Search | Semantic document retrieval |
+| **Metadata DB** | MongoDB Atlas | Companies, users, audit logs |
+| **Auth** | Nova JWT (HS256) | Password-based login with join code |
+| **API** | FastAPI + Uvicorn | REST endpoints |
+| **Security** | Lakera Guard | Prompt injection, PII, jailbreak protection |
+| **Graph RAG** | NetworkX | Entity-relationship cross-document reasoning |
+| **HITL** | Custom Controller | Human-in-the-loop escalation |
+| **Email** | SMTP (Gmail) | Invite emails from admin's own Gmail |
+| **Plugins** | Google Workspace | Drive, Docs, Sheets, Gmail, Calendar, Meet |
+
+---
+
+## 🔐 Multi-Tenant Architecture
+
+Every company gets a **fully isolated workspace**:
+
+- **Auto-generated `tenant_id`** = Company workspace (UUID, no external service needed)
+- **Join Code** = Unique code employees use to register + login
+- **Dual MongoDB Databases** = True physical data separation
+
+### Dual Database Isolation
+
+```
+nova_ai                   ← Regular database
+├── companies             (workspace metadata + email config)
+├── users                 (employee records, roles, hashed passwords)
+├── audit_logs            (compliance trail)
+└── knowledge_vectors     (public documents — all roles)
+
+nova_ai_confidential      ← Confidential database
+└── knowledge_vectors     (private documents — managers+ only)
+```
+
+> **Security guarantee:** An employee request physically **never touches** `nova_ai_confidential`. It is not filtered — it is simply never queried.
+
+### Role-Based Access Control (RBAC)
+
+| Role | Public DB | Confidential DB | Admin Actions |
+|---|---|---|---|
+| `employee` | ✅ | ❌ Never queried | ❌ |
+| `team_lead` | ✅ | ✅ | ❌ |
+| `manager` | ✅ | ✅ | ❌ |
+| `admin` | ✅ | ✅ | ✅ invite, ingest, config |
+
+### Authentication
+
+| User type | Login method | Token |
+|---|---|---|
+| **Admin** | `join_code + email + password` | Nova JWT (12h) |
+| **Manager / Team Lead** | `join_code + email + password` | Nova JWT (12h) |
+| **Employee** | `join_code + email + password` | Nova JWT (12h) |
+| **Developer** | Clerk (internal only) | Clerk JWT |
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.11+
+- MongoDB Atlas account (free M0 tier works)
+- OpenAI API key
+
+### 1. Clone & Install
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/SAGARRAMBADE21/Nova-AI-
-cd enterprise_ai_assistant
-
-# 2. Create & activate virtual environment
-python -m venv venv
-venv\Scripts\activate       # Windows
-# source venv/bin/activate  # macOS/Linux
-
-# 3. Install dependencies
-pip install -r enterprise_ai/requirements.txt
-
-# 4. Configure environment variables
-cp enterprise_ai/.env.example enterprise_ai/.env
-# -> Open .env and fill in your API keys
-
-# 5. Run CLI (interactive mode)
-python enterprise_ai/main.py
-
-# 6. OR run the REST API server
-python enterprise_ai/api/server.py
-# -> API available at http://localhost:8000
+git clone https://github.com/SAGARRAMBADE21/Nova-AI-.git
+cd Nova-AI-/enterprise_ai
+pip install -r requirements.txt
 ```
 
----
-
-## Project Structure
-
-```
-enterprise_ai_assistant/
-|
-+-- README.md                          <- You are here
-|
-+-- enterprise_ai/                     # Main application package
-    +-- main.py                        # CLI entry point + interactive loop
-    +-- requirements.txt               # All Python dependencies
-    +-- .env.example                   # Environment variable template
-    +-- README.md                      # Detailed module-level documentation
-    |
-    +-- security/
-    |   +-- lakera_guard.py            # 3-checkpoint AI firewall (input/doc/output)
-    |   +-- rbac.py                    # Role-based access control (Employee -> Admin)
-    |
-    +-- core/
-    |   +-- rag.py                     # Vector RAG + Graph RAG + Self-Correcting RAG
-    |   +-- hitl.py                    # Human-in-the-Loop (3 escalation levels)
-    |   +-- web_scraper.py             # Real-time web scraping pipeline
-    |
-    +-- agents/
-    |   +-- multi_agent.py             # 5-agent orchestration system
-    |
-    +-- data/
-    |   +-- ingestion.py               # Real-time admin document ingestion
-    |
-    +-- plugins/
-    |   +-- base.py                    # BasePlugin, PluginResult, @with_retry
-    |   +-- registry.py                # PluginRegistry (health checks, discovery)
-    |   +-- google_drive.py            # Google Drive plugin
-    |   +-- google_docs.py             # Google Docs plugin
-    |   +-- google_sheets.py           # Google Sheets plugin
-    |   +-- google_calendar.py         # Google Calendar plugin
-    |   +-- gmail.py                   # Gmail plugin
-    |   +-- google_meet.py             # Google Meet plugin
-    |   +-- slack.py                   # Slack plugin
-    |   +-- notion.py                  # Notion plugin
-    |   +-- grafana.py                 # Grafana plugin
-    |
-    +-- utils/
-    |   +-- llmops.py                  # Observability, PII-safe logging, metrics
-    |   +-- pdf_generator.py           # PDF documentation generator
-    |
-    +-- api/
-        +-- server.py                  # FastAPI REST server (chat / ingest / metrics)
-```
-
----
-
-## Environment Variables
-
-Copy `enterprise_ai/.env.example` to `enterprise_ai/.env` and configure:
-
-| Variable                    | Description                                      | Required   |
-|-----------------------------|--------------------------------------------------|------------|
-| `OPENAI_API_KEY`            | OpenAI API key                                   | Yes        |
-| `OPENAI_MODEL`              | Model to use (default: `gpt-4`)                  | Optional   |
-| `LAKERA_API_KEY`            | Lakera Guard API key                             | Optional   |
-| `LAKERA_PROJECT_ID`         | Lakera project ID                                | Optional   |
-| `CHROMA_PERSIST_DIR`        | Path to ChromaDB vector storage                  | Optional   |
-| `GOOGLE_CREDENTIALS_FILE`   | Google OAuth credentials file path               | Optional   |
-| `GOOGLE_TOKEN_FILE`         | Google OAuth token file path                     | Optional   |
-| `SLACK_BOT_TOKEN`           | Slack Bot token                                  | Optional   |
-| `NOTION_API_KEY`            | Notion integration API key                       | Optional   |
-| `GRAFANA_URL`               | Grafana instance URL                             | Optional   |
-| `GRAFANA_API_KEY`           | Grafana API key                                  | Optional   |
-| `LOG_LEVEL`                 | Logging level (default: `INFO`)                  | Optional   |
-| `LOG_FILE`                  | Log file path                                    | Optional   |
-| `METRICS_PORT`              | Prometheus metrics port (default: `8001`)        | Optional   |
-| `HITL_CONFIDENCE_THRESHOLD` | HITL trigger threshold (default: `0.4`)          | Optional   |
-| `HITL_SLA_MINUTES`          | HITL response SLA in minutes                     | Optional   |
-| `ADMIN_EMAIL`               | Admin email for escalations                      | Optional   |
-
----
-
-## API Endpoints
-
-Once the server is running at `http://localhost:8000`:
+### 2. Configure Environment
 
 ```bash
-# Send a chat message
+cp .env.example .env
+# Fill in your values
+```
+
+Minimum required:
+```env
+OPENAI_API_KEY=sk-proj-...
+MONGODB_URI=mongodb+srv://<user>:<pass>@cluster0.xxxxx.mongodb.net/
+NOVA_JWT_SECRET=<run: python -c "import secrets; print(secrets.token_hex(32))">
+```
+
+### 3. MongoDB Atlas — Vector Search Index
+
+Create this index on `knowledge_vectors` in **both** `nova_ai` and `nova_ai_confidential`:
+
+```json
+{
+  "fields": [
+    { "type": "vector", "path": "embedding", "numDimensions": 1536, "similarity": "cosine" },
+    { "type": "filter", "path": "tenant_id" },
+    { "type": "filter", "path": "db_type" }
+  ]
+}
+```
+
+Index name: `vector_index`
+
+### 4. Run
+
+```bash
+python api/server.py
+# → http://localhost:8000/docs
+```
+
+---
+
+## 📡 API Endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/onboard` | 🔓 Public | Company owner creates workspace + admin account |
+| `POST` | `/register` | 🔓 Public | First-time user sets their password |
+| `POST` | `/join` | 🔓 Public | Login → returns Nova JWT |
+| `GET` | `/health` | 🔓 Public | Health check |
+| `POST` | `/chat` | 🔒 Nova JWT | Ask ARIA a question |
+| `POST` | `/ingest` | 🔒 Admin JWT | Upload document (public or confidential) |
+| `POST` | `/invite-user` | 🔒 Admin JWT | Add employee + send invite email |
+| `POST` | `/email-config` | 🔒 Admin JWT | Set admin Gmail for sending invites |
+| `GET` | `/users` | 🔒 Admin JWT | List all workspace users |
+| `GET` | `/metrics` | 🔒 Any JWT | LLMOps performance metrics |
+
+### Complete User Flow
+
+**1. Company owner creates workspace:**
+```bash
+curl -X POST http://localhost:8000/onboard \
+  -d '{"company_name":"Acme Corp","admin_email":"admin@acme.com","admin_password":"SecurePass123"}'
+# Returns: join_code (e.g. "ACMEXK7P12")
+```
+
+**2. Admin configures email (so invites send from their Gmail):**
+```bash
+curl -X POST http://localhost:8000/email-config \
+  -H "Authorization: Bearer <admin_jwt>" \
+  -d '{"sender_email":"admin@gmail.com","sender_password":"abcd efgh ijkl mnop"}'
+```
+
+**3. Admin invites an employee (sends real email):**
+```bash
+curl -X POST http://localhost:8000/invite-user \
+  -H "Authorization: Bearer <admin_jwt>" \
+  -d '{"email":"john@acme.com","role":"employee"}'
+# John receives email with join code + registration steps
+```
+
+**4. John registers:**
+```bash
+curl -X POST http://localhost:8000/register \
+  -d '{"join_code":"ACMEXK7P12","email":"john@acme.com","password":"MyPass123"}'
+```
+
+**5. John logs in:**
+```bash
+curl -X POST http://localhost:8000/join \
+  -d '{"join_code":"ACMEXK7P12","email":"john@acme.com","password":"MyPass123"}'
+# Returns: { "token": "eyJ..." }
+```
+
+**6. John chats with ARIA:**
+```bash
 curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "What is our Q3 revenue?", "user_id": "user_001", "user_role": "employee"}'
-
-# Admin: ingest a document into the knowledge base
-curl -X POST http://localhost:8000/ingest \
-  -H "Content-Type: application/json" \
-  -d '{"file_path": "./data/report.pdf", "category": "finance", "uploaded_by": "admin"}'
-
-# Generate a PDF documentation report
-curl -X POST http://localhost:8000/generate-pdf
-
-# View LLMOps metrics
-curl http://localhost:8000/metrics
-
-# Health check
-curl http://localhost:8000/health
-```
-
-The API also serves **interactive docs** at:
-- Swagger UI -> [http://localhost:8000/docs](http://localhost:8000/docs)
-- ReDoc -> [http://localhost:8000/redoc](http://localhost:8000/redoc)
-
----
-
-## Full Request Pipeline
-
-```
-User Prompt
-    |
-[1]  Lakera Guard — INPUT SCAN        (injection / jailbreak / PII detection)
-    | clean
-[2]  Security Agent — RBAC CHECK      (role-based access enforcement)
-    | authorised
-[3]  Retrieval Agent — RAG            (Vector RAG + Graph RAG + web scraping)
-    |
-[4]  Self-Correcting RAG              (relevance scoring / conflict detection / confidence)
-    |
-[5]  Lakera Guard — DOCUMENT SCAN     (poisoned chunk detection)
-    | clean
-[6]  Validation Agent                 (cross-checks results, triggers HITL if needed)
-    |
-[7]  Tool Agent                       (detects intent, queues plugin actions)
-    |
-[8]  HITL Gate                        (low confidence or high-risk -> human reviewer)
-    | approved
-[9]  LLM — OpenAI GPT-4               (structured response generation via ARIA prompt)
-    |
-[10] Lakera Guard — OUTPUT SCAN       (leakage / PII / hallucination detection)
-    | safe
-[11] Plugin Execution                 (tools run silently or request confirmation)
-    |
-[12] LLMOps Logger                    (interaction log: query, agents, tools, security, latency)
-    |
-Final Response -> User
+  -H "Authorization: Bearer <john_jwt>" \
+  -d '{"prompt":"What is our annual leave policy?"}'
 ```
 
 ---
 
-## Security Architecture
+## 🤖 5-Agent Pipeline
 
-| Layer              | Component      | What It Does                                            |
-|--------------------|----------------|---------------------------------------------------------|
-| Input firewall     | Lakera Guard   | Blocks prompt injections, jailbreaks, PII leakage       |
-| Access control     | RBAC           | Role-based data category permissions                    |
-| Document firewall  | Lakera Guard   | Removes poisoned or malicious RAG chunks                |
-| Output firewall    | Lakera Guard   | Prevents data leakage and PII in responses              |
-| Audit trail        | LLMOps         | Full PII-stripped interaction log (JSONL)               |
-| Escalation gate    | HITL           | Human review for low-confidence / high-risk tasks       |
-
-### RBAC Roles
-
-| Role       | Access Level                                              |
-|------------|-----------------------------------------------------------|
-| `employee` | General knowledge, public policies, self-service tasks    |
-| `manager`  | Team data, reports, scheduling, performance data          |
-| `admin`    | Full access including sensitive financial and HR data     |
-
----
-
-## Agents
-
-| Agent               | Responsibility                                               |
-|---------------------|--------------------------------------------------------------|
-| `OrchestratorAgent` | Coordinates all agents, assembles the final response         |
-| `SecurityAgent`     | Enforces RBAC before any retrieval or action occurs          |
-| `RetrievalAgent`    | Runs Vector RAG + Graph RAG + web scraping fallback          |
-| `ValidationAgent`   | Cross-checks data, detects conflicts, triggers HITL          |
-| `ToolAgent`         | Detects tool intent from queries, queues plugin actions      |
-
----
-
-## Plugins
-
-All plugins use a shared `BasePlugin` class and support:
-- Retry logic with exponential backoff (`@with_retry`)
-- Input validation on all required parameters
-- Health check (`health_check()`)
-- Action discovery (`list_actions()`)
-- Structured error codes (`NOT_CONNECTED`, `INVALID_PARAMS`, etc.)
-
-| Plugin            | File                 | Key Actions                                                                       |
-|-------------------|----------------------|-----------------------------------------------------------------------------------|
-| Google Drive      | `google_drive.py`    | list_files, search_files, upload_file, download_file, delete_file, share_file     |
-| Google Docs       | `google_docs.py`     | create_document, get_document, append_content, edit_document, share_document      |
-| Google Sheets     | `google_sheets.py`   | create_spreadsheet, read_data, push_data, append_row, clear_range                 |
-| Google Calendar   | `google_calendar.py` | list_events, create_event, update_event, delete_event, set_reminder               |
-| Gmail             | `gmail.py`           | send_email, draft_email, search_emails, read_email, reply_email, create_label     |
-| Google Meet       | `google_meet.py`     | create_meeting, schedule_call (real Meet links via Calendar API)                  |
-| Slack             | `slack.py`           | send_message, list_channels, upload_file, reply_to_thread, get_channel_history    |
-| Notion            | `notion.py`          | create_page, get_page, search_pages, update_page, append_blocks                   |
-| Grafana           | `grafana.py`         | push_metrics, list_dashboards, get_dashboard, create_annotation                   |
-
-### Plugin Registry Usage
-
-```python
-from plugins import PluginRegistry
-
-registry = PluginRegistry()
-
-registry.list_plugins()                        # List all available plugins
-registry.list_actions("slack")                 # List actions for a specific plugin
-
-result = registry.execute("slack", "send_message", {
-    "channel": "#general",
-    "message": "Deployment complete"
-})
-
-registry.health_report()                       # Health check all plugins
+```
+User Query
+    │
+    ▼
+┌─────────────────┐
+│ SecurityAgent   │  ← RBAC: resolves allowed_db_types from role
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│ RetrievalAgent  │  ← MongoDB Atlas Vector Search (tenant + role scoped)
+│                 │    + NetworkX Knowledge Graph + Web fallback
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│ValidationAgent  │  ← Confidence scoring, conflict detection, HITL trigger
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│  ToolAgent      │  ← Detects plugin actions (email, calendar, Drive...)
+└────────┬────────┘
+         ▼
+┌─────────────────┐
+│    GPT-4        │  ← Final answer with RAG context injected
+└─────────────────┘
 ```
 
 ---
 
-## LLMOps & Observability
+## 📁 Project Structure
 
-All interactions are automatically logged to `logs/interactions.jsonl` with:
-
-- Interaction ID, user ID, session ID
-- Query and response (PII-stripped)
-- Confidence level and sources used
-- Tool actions executed
-- Security events triggered
-- Latency (ms) and token count
-- HITL trigger flag
-
-**Metrics tracked:**
-- Total queries, avg latency, total tokens
-- Tool invocations, security blocks, HITL requests, errors
-
----
-
-## HITL (Human-in-the-Loop)
-
-Nova AI automatically escalates to a human reviewer when:
-- Retrieval confidence is **LOW**
-- The query contains high-risk keywords (`salary`, `legal`, `delete`, `bulk`, `financial`)
-- A tool action is irreversible and affects multiple users
-- The user explicitly requests escalation
-
-| Level    | Trigger                         | SLA              |
-|----------|---------------------------------|------------------|
-| `LOW`    | Low confidence retrieval        | 30 min (default) |
-| `MEDIUM` | Sensitive data category access  | 15 min           |
-| `HIGH`   | High-risk irreversible actions  | Immediate        |
-
----
-
-## Supported Data Ingestion Formats
-
-| Format | Support               |
-|--------|-----------------------|
-| PDF    | via PyPDF2            |
-| DOCX   | via python-docx       |
-| XLSX   | via openpyxl          |
-| CSV    | native                |
-| TXT    | native                |
-| JSON   | native                |
-| XML    | native                |
-| URLs   | via web scraper       |
-
----
-
-## Contributing
-
-1. **Add a new plugin** -> create `plugins/<name>.py` extending `BasePlugin`
-2. **Register it** -> add to `plugins/registry.py` -> `_register_all()`
-3. **Wire tool intent** -> add trigger keywords in `agents/multi_agent.py` -> `ToolAgent.TOOL_MAP`
-4. **Add credentials** -> update `.env.example` with any new keys needed
+```
+enterprise_ai/
+├── main.py                    # Core assistant + CLI
+├── requirements.txt
+├── .env.example
+│
+├── api/
+│   └── server.py              # FastAPI — all endpoints
+│
+├── db/
+│   └── mongodb.py             # TenantManager + TenantVectorStore
+│                              # (password hashing, email config encryption)
+│
+├── security/
+│   ├── nova_jwt.py            # Employee JWT (HS256, join code flow)
+│   ├── clerk_auth.py          # Clerk JWT (developer-only)
+│   ├── rbac.py                # Role → db_type mapping
+│   └── lakera_guard.py        # Prompt injection + PII protection
+│
+├── core/
+│   ├── rag.py                 # SelfCorrectingRAG (dual DB aware)
+│   ├── hitl.py                # Human-in-the-loop controller
+│   └── web_scraper.py
+│
+├── agents/
+│   └── multi_agent.py         # 5-agent orchestration
+│
+├── data/
+│   └── ingestion.py           # File parsing + dual-DB routing
+│
+├── plugins/
+│   ├── registry.py
+│   ├── gmail.py
+│   ├── google_drive.py
+│   ├── google_docs.py
+│   ├── google_sheets.py
+│   ├── google_calendar.py
+│   └── google_meet.py
+│
+└── utils/
+    ├── email_sender.py        # SMTP invite emails (from admin's Gmail)
+    └── llmops.py              # Interaction logging + metrics
+```
 
 ---
 
-## Detailed Documentation
+## 🔒 Security Features
 
-For full module-level documentation, see [`enterprise_ai/README.md`](enterprise_ai/README.md).
+| Feature | Implementation |
+|---|---|
+| **Password Auth** | PBKDF2-SHA256 (200k rounds) — no external libs |
+| **JWT** | Nova HS256 JWT (12h expiry) per user session |
+| **Tenant Isolation** | All DB queries filtered by `tenant_id` |
+| **Dual DB** | Physical separation — employee code never touches confidential DB |
+| **RBAC** | Role in JWT → db scope resolved per request |
+| **Email Encryption** | Admin Gmail App Password encrypted with Fernet before storing |
+| **Prompt Injection** | Lakera Guard scans all inputs |
+| **PII Protection** | Lakera Guard strips PII from logs |
+| **Audit Logs** | Every interaction logged to MongoDB (tenant-scoped) |
+| **HITL** | Low-confidence answers escalated to human review |
 
 ---
 
-## License
+## ⚙️ Environment Variables
 
-This project is licensed under the **MIT License**.
+| Variable | Required | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | ✅ | OpenAI API key |
+| `OPENAI_MODEL` | ✅ | LLM model (`gpt-4`) |
+| `OPENAI_EMBEDDING_MODEL` | ✅ | Embedding model (`text-embedding-3-small`) |
+| `MONGODB_URI` | ✅ | MongoDB Atlas connection string |
+| `MONGODB_DB_NAME` | ✅ | Public DB (default: `nova_ai`) |
+| `MONGODB_CONFIDENTIAL_DB_NAME` | ✅ | Confidential DB (default: `nova_ai_confidential`) |
+| `NOVA_JWT_SECRET` | ✅ | Secret for signing employee JWTs |
+| `CLERK_PUBLISHABLE_KEY` | Dev only | Clerk (developer internal use) |
+| `CLERK_SECRET_KEY` | Dev only | Clerk (developer internal use) |
+| `CLERK_JWKS_URL` | Dev only | Clerk JWKS URL |
+| `LAKERA_API_KEY` | Optional | Lakera Guard prompt injection protection |
+| `LOG_LEVEL` | Optional | Logging level (default: `INFO`) |
+
+> **Note:** Email credentials (`EMAIL_USER`, `EMAIL_PASSWORD`) are optional platform fallbacks. Each company admin sets their own Gmail via `POST /email-config` from the dashboard.
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] Next.js Admin Dashboard (document upload, user management, email config)
+- [ ] Employee Chat Interface (frontend)
+- [ ] Slack / Notion plugin
+- [ ] OpenTelemetry + Grafana metrics
+- [ ] Document version control
+- [ ] Multi-language support
+
+---
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
 <div align="center">
-<sub>Built by <strong>Sagar Rambade</strong> · Nova AI</sub>
+  <strong>Built with ❤️ for enterprise teams who deserve better AI tools.</strong>
 </div>
