@@ -27,6 +27,7 @@ from main import EnterpriseAIAssistant
 from security.rbac import Role
 from security.clerk_auth import verify_clerk_token, ClerkTokenPayload
 from security.nova_jwt  import create_employee_token, verify_employee_token
+from utils.email_sender import send_invite_email
 
 app       = FastAPI(title="Nova AI — Enterprise Assistant", version="2.0.0")
 assistant = EnterpriseAIAssistant()
@@ -358,31 +359,19 @@ async def invite_user(
         invited_by = token.user_id,
     )
 
-    # Also send Clerk organization invitation (real email)
-    clerk_secret = os.getenv("CLERK_SECRET_KEY", "")
-    if clerk_secret and token.tenant_id.startswith("org_"):
-        try:
-            async with httpx.AsyncClient() as http:
-                resp = await http.post(
-                    f"https://api.clerk.com/v1/organizations/{token.tenant_id}/invitations",
-                    headers={
-                        "Authorization": f"Bearer {clerk_secret}",
-                        "Content-Type":  "application/json",
-                    },
-                    json={
-                        "email_address": request.email,
-                        "role":          f"org:{request.role}",
-                    },
-                    timeout=10,
-                )
-            if resp.status_code in (200, 201):
-                result["clerk_invite"] = "sent"
-            else:
-                result["clerk_invite"] = f"skipped ({resp.status_code})"
-        except Exception as e:
-            result["clerk_invite"] = f"error: {e}"
+    # Send real invite email with join code + registration steps
+    company = assistant.tenant_manager.get_company_by_tenant_id(token.tenant_id)
+    if company:
+        email_sent = send_invite_email(
+            to_email     = request.email,
+            company_name = company["company_name"],
+            join_code    = company["join_code"],
+            role         = request.role,
+            invited_by   = token.user_id,
+        )
+        result["invite_email"] = "sent" if email_sent else "skipped (email not configured)"
     else:
-        result["clerk_invite"] = "skipped (dev mode)"
+        result["invite_email"] = "skipped (company not found)"
 
     return result
 
