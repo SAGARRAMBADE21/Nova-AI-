@@ -97,6 +97,58 @@ class TenantManager:
     def get_company_by_tenant_id(self, tenant_id: str) -> Optional[dict]:
         return self.companies.find_one({"tenant_id": tenant_id}, {"_id": 0})
 
+    # ── Email Config (admin's sender Gmail) ───────────────────────────────
+
+    def _fernet(self):
+        """Build a Fernet cipher from NOVA_JWT_SECRET."""
+        import base64
+        from cryptography.fernet import Fernet
+        secret = os.getenv("NOVA_JWT_SECRET", "default-secret-change-me")
+        # Fernet key must be 32 url-safe base64 bytes
+        key = base64.urlsafe_b64encode(
+            hashlib.sha256(secret.encode()).digest()
+        )
+        return Fernet(key)
+
+    def set_email_config(self, tenant_id: str,
+                         sender_email: str, app_password: str) -> bool:
+        """
+        Store admin's Gmail credentials (app_password encrypted).
+        Called from POST /email-config on the admin dashboard.
+        """
+        encrypted = self._fernet().encrypt(app_password.encode()).decode()
+        self.companies.update_one(
+            {"tenant_id": tenant_id},
+            {"$set": {
+                "sender_email":    sender_email,
+                "sender_password": encrypted,   # encrypted, never stored plain
+            }},
+        )
+        logger.info(
+            f"[TenantManager] Email config saved | tenant={tenant_id}"
+        )
+        return True
+
+    def get_email_config(self, tenant_id: str) -> Optional[dict]:
+        """
+        Return decrypted sender email and app_password for this tenant.
+        Returns None if not configured.
+        """
+        company = self.get_company_by_tenant_id(tenant_id)
+        if not company or "sender_email" not in company:
+            return None
+        try:
+            decrypted = self._fernet().decrypt(
+                company["sender_password"].encode()
+            ).decode()
+            return {
+                "sender_email":    company["sender_email"],
+                "sender_password": decrypted,
+            }
+        except Exception as e:
+            logger.error(f"[TenantManager] Email config decrypt error: {e}")
+            return None
+
     # ── Password (for non-admin users) ──────────────────────────────────────
 
     @staticmethod

@@ -359,17 +359,23 @@ async def invite_user(
         invited_by = token.user_id,
     )
 
-    # Send real invite email with join code + registration steps
-    company = assistant.tenant_manager.get_company_by_tenant_id(token.tenant_id)
+    # Send invite email FROM admin's own Gmail (fetched from MongoDB)
+    company    = assistant.tenant_manager.get_company_by_tenant_id(token.tenant_id)
+    email_cfg  = assistant.tenant_manager.get_email_config(token.tenant_id)
     if company:
         email_sent = send_invite_email(
-            to_email     = request.email,
-            company_name = company["company_name"],
-            join_code    = company["join_code"],
-            role         = request.role,
-            invited_by   = token.user_id,
+            to_email        = request.email,
+            company_name    = company["company_name"],
+            join_code       = company["join_code"],
+            role            = request.role,
+            invited_by      = token.user_id,
+            sender_email    = (email_cfg or {}).get("sender_email",    ""),
+            sender_password = (email_cfg or {}).get("sender_password", ""),
         )
-        result["invite_email"] = "sent" if email_sent else "skipped (email not configured)"
+        result["invite_email"] = (
+            "sent" if email_sent
+            else "skipped — configure Gmail via POST /email-config"
+        )
     else:
         result["invite_email"] = "skipped (company not found)"
 
@@ -382,13 +388,52 @@ async def list_users(
 ):
     """Admin-only: list all users in this company workspace."""
     if token.role != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Only admins can view user lists.",
-        )
-
+        raise HTTPException(status_code=403,
+                            detail="Only admins can view user lists.")
     users = assistant.list_users(token.tenant_id)
     return {"tenant_id": token.tenant_id, "users": users}
+
+
+class EmailConfigRequest(BaseModel):
+    sender_email:    str   # admin's Gmail address
+    sender_password: str   # Gmail App Password (16 chars, NOT normal password)
+
+@app.post("/email-config")
+async def set_email_config(
+    request: EmailConfigRequest,
+    token:   ClerkTokenPayload = Depends(get_current_user),
+):
+    """
+    Admin sets their own Gmail for sending invite emails.
+    Invite emails will come FROM this Gmail address.
+
+    Gmail App Password setup:
+      1. myaccount.google.com → Security → 2-Step Verification (enable)
+      2. App Passwords → create one for 'Nova AI'
+      3. Paste the 16-char code here as sender_password
+    """
+    if token.role != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Only admins can configure email settings.")
+
+    if "@" not in request.sender_email:
+        raise HTTPException(status_code=400, detail="Invalid email address.")
+    if len(request.sender_password.replace(" ", "")) < 16:
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail App Password must be 16 characters. "
+                   "Get it at myaccount.google.com → Security → App Passwords."
+        )
+
+    assistant.tenant_manager.set_email_config(
+        tenant_id    = token.tenant_id,
+        sender_email = request.sender_email,
+        app_password = request.sender_password.replace(" ", ""),  # strip spaces
+    )
+    return {
+        "message": f"Email configured. Invites will now be sent from {request.sender_email}.",
+        "sender":  request.sender_email,
+    }
 
 
 @app.get("/metrics")

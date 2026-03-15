@@ -39,22 +39,32 @@ def _smtp_config() -> dict:
 
 
 def send_invite_email(
-    to_email:     str,
-    company_name: str,
-    join_code:    str,
-    role:         str,
-    invited_by:   str = "your admin",
+    to_email:        str,
+    company_name:    str,
+    join_code:       str,
+    role:            str,
+    invited_by:      str = "your admin",
+    sender_email:    str = "",        # admin's Gmail — comes from MongoDB
+    sender_password: str = "",        # admin's App Password — decrypted from DB
 ) -> bool:
     """
-    Send a workspace invitation email to a new user.
-    Returns True on success, False if email is not configured or fails.
+    Send a workspace invitation email FROM the admin's own Gmail.
+
+    If admin hasn't configured their Gmail yet, falls back to
+    platform EMAIL_USER/EMAIL_PASSWORD from .env (if set).
+    Returns True on success, False if no email credentials available.
     """
     cfg = _smtp_config()
 
-    if not cfg["user"] or not cfg["password"]:
+    # Use admin's Gmail first, fall back to platform Gmail
+    use_email    = sender_email    or cfg["user"]
+    use_password = sender_password or cfg["password"]
+
+    if not use_email or not use_password:
         logger.warning(
-            "[EmailSender] EMAIL_USER or EMAIL_PASSWORD not set — "
-            "skipping invite email. Set them in .env to enable."
+            f"[EmailSender] No Gmail credentials available for tenant — "
+            f"invite email to {to_email} skipped. "
+            f"Admin must set their Gmail via POST /email-config."
         )
         return False
 
@@ -126,7 +136,7 @@ def send_invite_email(
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"]    = f"{cfg['from_name']} <{cfg['user']}>"
+        msg["From"]    = f"{cfg['from_name']} <{use_email}>"
         msg["To"]      = to_email
 
         msg.attach(MIMEText(plain_body, "plain"))
@@ -135,12 +145,12 @@ def send_invite_email(
         with smtplib.SMTP(cfg["host"], cfg["port"], timeout=10) as smtp:
             smtp.ehlo()
             smtp.starttls()
-            smtp.login(cfg["user"], cfg["password"])
-            smtp.sendmail(cfg["user"], to_email, msg.as_string())
+            smtp.login(use_email, use_password)
+            smtp.sendmail(use_email, to_email, msg.as_string())
 
         logger.info(
             f"[EmailSender] Invite sent → {to_email} | "
-            f"company={company_name} | role={role}"
+            f"from={use_email} | company={company_name} | role={role}"
         )
         return True
 
