@@ -208,9 +208,34 @@ class DataIngestionPipeline:
         soup = BeautifulSoup(path.read_text(encoding="utf-8"), "xml")
         return soup.get_text(separator="\n", strip=True)
 
-    def _chunk(self, content: str, chunk_size: int = 500) -> list[str]:
+    def _chunk(self, content: str,
+                chunk_size: int = 400,
+                overlap:    int = 60) -> list[str]:
+        """
+        Split content into overlapping word-window chunks.
+        Overlap prevents context from being cut at chunk boundaries,
+        which is a common RAG retrieval quality issue.
+
+        chunk_size = 400 words  (~600 tokens, well under embedding limit)
+        overlap    = 60  words  (~15% overlap — enough for boundary context)
+        """
         words = content.split()
-        return [
-            " ".join(words[i:i + chunk_size])
-            for i in range(0, len(words), chunk_size)
-        ]
+        if not words:
+            return []
+
+        chunks = []
+        start  = 0
+        while start < len(words):
+            end   = min(start + chunk_size, len(words))
+            chunk = " ".join(words[start:end])
+            if chunk.strip():
+                chunks.append(chunk)
+            if end >= len(words):
+                break
+            start += chunk_size - overlap   # slide forward with overlap
+
+        logger.info(
+            f"[Ingestion] Chunked into {len(chunks)} chunks "
+            f"(size={chunk_size}, overlap={overlap})"
+        )
+        return chunks

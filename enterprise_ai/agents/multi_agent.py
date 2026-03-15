@@ -270,13 +270,22 @@ class OrchestratorAgent(BaseAgent):
         if not ctx.retrieval or not ctx.retrieval.chunks:
             return "No relevant internal data found."
 
+        # Sort by relevance score (highest first) before taking top N
+        top_chunks = sorted(
+            ctx.retrieval.chunks, key=lambda c: c.score, reverse=True
+        )[:8]   # top 8 most relevant chunks
+
         lines = []
-        for chunk in ctx.retrieval.chunks[:6]:   # Top 6 chunks
-            lines.append(f"[Source: {chunk.source}]\n{chunk.content}\n")
+        for i, chunk in enumerate(top_chunks, 1):
+            db_label = "[CONFIDENTIAL]" if chunk.category == "private" else ""
+            lines.append(
+                f"[{i}] Source: {chunk.source} {db_label}"
+                f" | Score: {chunk.score:.2f}\n{chunk.content}\n"
+            )
 
         if ctx.retrieval.conflicts:
             lines.append(
-                f"\n[NOTE: Conflicting data from: "
+                f"\n[⚠ DATA CONFLICT: Sources disagree — "
                 f"{', '.join(ctx.retrieval.conflicts)}]"
             )
 

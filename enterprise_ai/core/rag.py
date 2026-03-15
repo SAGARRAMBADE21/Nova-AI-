@@ -115,14 +115,17 @@ class SelfCorrectingRAG:
     MAX_REFRAME_ATTEMPTS = 3
 
     def __init__(self, public_store, private_store,
-                 knowledge_graph: KnowledgeGraph):
+                 knowledge_graph: KnowledgeGraph,
+                 openai_client=None):
         """
-        public_store  — TenantVectorStore on nova_ai database          (all roles)
-        private_store — TenantVectorStore on nova_ai_confidential db   (manager+ only)
+        public_store   — TenantVectorStore on nova_ai database         (all roles)
+        private_store  — TenantVectorStore on nova_ai_confidential db  (manager+ only)
+        openai_client  — optional; used for LLM-based query reframing
         """
         self.public_store    = public_store
         self.private_store   = private_store
         self.knowledge_graph = knowledge_graph
+        self.openai          = openai_client
 
     def retrieve(self, query: str,
                  tenant_id: str,
@@ -250,9 +253,48 @@ class SelfCorrectingRAG:
         return ConfidenceLevel.LOW
 
     def _reframe_query(self, query: str) -> str:
-        """Simplify query for better retrieval match."""
-        stop_words = {"the", "a", "an", "is", "are", "was", "were",
-                      "what", "how", "who"}
+        """
+        Rephrase the query for better retrieval match.
+        Uses GPT-4 if available (much better than stop-word removal).
+        Falls back to naive keyword extraction if OpenAI not configured.
+        """
+        # LLM-based reframing (preferred)
+        if self.openai:
+            try:
+                resp = self.openai.chat.completions.create(
+                    model    = "gpt-4",
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a search query optimizer. "
+                                "Rewrite the user's question as a concise, "
+                                "keyword-focused search query suitable for "
+                                "semantic document retrieval. "
+                                "Return ONLY the rewritten query, nothing else."
+                            ),
+                        },
+                        {"role": "user", "content": query},
+                    ],
+                    temperature = 0.0,
+                    max_tokens  = 60,
+                )
+                reframed = resp.choices[0].message.content.strip()
+                if reframed and reframed != query:
+                    logger.info(
+                        f"[SelfCorrectingRAG] LLM reframe: \"{query}\" → \"{reframed}\""
+                    )
+                    return reframed
+            except Exception as e:
+                logger.warning(f"[SelfCorrectingRAG] LLM reframe failed: {e}")
+
+        # Fallback: naive stop-word removal
+        stop_words = {
+            "the", "a", "an", "is", "are", "was", "were",
+            "what", "how", "who", "when", "where", "why",
+            "can", "could", "would", "should", "do", "does",
+            "please", "tell", "me", "about", "explain",
+        }
         words    = [w for w in query.split() if w.lower() not in stop_words]
-        reframed = " ".join(words[:8])
-        return reframed if reframed and len(reframed) >= 3 else query
+        reframed = " ".join(words[:10])  # keep top 10 keywords
+        return reframed if len(reframed) >= 3 else query
