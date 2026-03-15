@@ -1,122 +1,129 @@
-# Nova AI — Enterprise AI Assistant (ARIA)
+<div align="center">
 
-> **Adaptive Retrieval Intelligence Assistant** — A secure, multi-tenant enterprise AI platform powered by GPT-4, MongoDB Atlas Vector Search, and role-based password authentication.
+<br />
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue?style=for-the-badge&logo=python)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb)](https://cloud.mongodb.com)
-[![OpenAI](https://img.shields.io/badge/GPT--4-OpenAI-412991?style=for-the-badge&logo=openai)](https://openai.com)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+# ✦ Nova AI
+
+### Enterprise AI Assistant — Secure · Multi-Tenant · RAG-Powered
+
+<br />
+
+[![Python](https://img.shields.io/badge/Python_3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![MongoDB](https://img.shields.io/badge/MongoDB_Atlas-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://cloud.mongodb.com)
+[![OpenAI](https://img.shields.io/badge/GPT--4-412991?style=flat-square&logo=openai&logoColor=white)](https://openai.com)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
+
+<br />
+
+> Give every company their own private AI assistant — scoped to their documents,
+> isolated from others, with role-based access so sensitive data stays protected.
+
+<br />
+
+</div>
 
 ---
 
-## 🌟 What is Nova AI?
+## What is Nova AI?
 
-Nova AI is a **production-ready enterprise AI assistant** that gives companies their own private, isolated AI workspace. Each company's data is completely separated from others. Employees get an AI assistant that answers only from **their company's own documents** — with strict role-based access so sensitive data stays protected.
+Nova AI is a **production-ready, multi-tenant AI assistant** built for enterprises. Each company gets a completely isolated workspace. Employees can ask questions and get answers drawn exclusively from their own company's uploaded documents.
 
-**Key differentiator:** Unlike generic AI tools (ChatGPT, Copilot), Nova AI is scoped entirely to your company. Confidential documents are physically stored in a separate database — employees can never access them.
+Unlike generic AI tools, Nova AI **never mixes data between companies** and **physically separates confidential documents** from regular ones — employees can't access them even if they try.
 
 ---
 
-## 🏗️ Architecture
+## How It Works
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                         COMPANY WORKSPACE                            │
-├──────────────────────┬───────────────────────────────────────────────┤
-│   EMPLOYEE           │   MANAGER / TEAM LEAD / ADMIN                 │
-│                      │                                               │
-│  join_code+email+pw  │   join_code+email+pw  (Nova JWT)              │
-│         │            │              │                                 │
-│  ┌──────▼────────────▼──────────────▼──────────────────────┐        │
-│  │        FastAPI  —  Nova JWT auth (HS256)                 │        │
-│  │       (tenant_id + role extracted from token)            │        │
-│  └───────────────────────────┬──────────────────────────────┘        │
-│                              │                                        │
-│  ┌───────────────────────────▼──────────────────────────────┐        │
-│  │              5-Agent Pipeline                             │        │
-│  │  Security → Retrieval → Validation → Tool → GPT-4        │        │
-│  └──────┬────────────────────────────────────────┬──────────┘        │
-│         │                                        │                   │
-│  ┌──────▼──────────┐                  ┌──────────▼────────────┐      │
-│  │  nova_ai (DB)   │                  │ nova_ai_confidential  │      │
-│  │  Public Docs    │                  │   Private Docs        │      │
-│  │  (All roles)    │                  │  (Manager+ only)      │      │
-│  └─────────────────┘                  └───────────────────────┘      │
-└──────────────────────────────────────────────────────────────────────┘
+ Company Owner
+      │
+      │  POST /onboard  →  workspace created, join code issued
+      │
+      ▼
+ ┌──────────────────────────────────────────────────────────────┐
+ │                     Nova AI Platform                         │
+ │                                                              │
+ │  Admin Dashboard                                             │
+ │  ├── Upload documents  →  public or confidential DB          │
+ │  ├── Invite team       →  email sent with join code          │
+ │  └── Manage users      →  roles: employee / manager / admin  │
+ │                                                              │
+ │  ┌─────────────────┐    ┌──────────────────────────────┐    │
+ │  │ nova_ai (DB)    │    │ nova_ai_confidential (DB)    │    │
+ │  │ Public docs     │    │ Confidential docs            │    │
+ │  │ All roles       │    │ Manager / Admin only         │    │
+ │  └─────────────────┘    └──────────────────────────────┘    │
+ │                                                              │
+ │  Employee asks a question                                    │
+ │  └── 5-Agent pipeline runs                                   │
+ │      ├── Security   → RBAC, Lakera Guard                     │
+ │      ├── Retrieval  → MongoDB Vector Search (scoped)         │
+ │      ├── Validation → Confidence score, HITL trigger         │
+ │      ├── Tools      → Google Workspace plugins               │
+ │      └── GPT-4      → Final answer                          │
+ └──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🛠️ Technology Stack
+## Tech Stack
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| **LLM** | OpenAI GPT-4 | Natural language responses |
-| **Embeddings** | `text-embedding-3-small` | 1536-dim semantic vectors |
-| **Vector DB** | MongoDB Atlas Vector Search | Semantic document retrieval |
-| **Metadata DB** | MongoDB Atlas | Companies, users, audit logs |
-| **Auth** | Nova JWT (HS256) | Password-based login with join code |
-| **API** | FastAPI + Uvicorn | REST endpoints |
-| **Security** | Lakera Guard | Prompt injection, PII, jailbreak protection |
-| **Graph RAG** | NetworkX | Entity-relationship cross-document reasoning |
-| **HITL** | Custom Controller | Human-in-the-loop escalation |
-| **Email** | SMTP (Gmail) | Invite emails from admin's own Gmail |
-| **Plugins** | Google Workspace | Drive, Docs, Sheets, Gmail, Calendar, Meet |
+| Layer | Technology |
+|---|---|
+| LLM | OpenAI GPT-4 |
+| Embeddings | `text-embedding-3-small` (1536-dim) |
+| Vector Search | MongoDB Atlas Vector Search |
+| Database | MongoDB Atlas |
+| Auth | Nova JWT (HS256) — join code + email + password |
+| API | FastAPI + Uvicorn |
+| Security | Lakera Guard (prompt injection, PII, jailbreak) |
+| Graph RAG | NetworkX (entity-relationship reasoning) |
+| HITL | Custom human-in-the-loop escalation |
+| Email | SMTP — invite emails from admin's own Gmail |
+| Plugins | Google Drive, Docs, Sheets, Gmail, Calendar, Meet |
 
 ---
 
-## 🔐 Multi-Tenant Architecture
-
-Every company gets a **fully isolated workspace**:
-
-- **Auto-generated `tenant_id`** = Company workspace (UUID, no external service needed)
-- **Join Code** = Unique code employees use to register + login
-- **Dual MongoDB Databases** = True physical data separation
+## Security Model
 
 ### Dual Database Isolation
 
 ```
-nova_ai                   ← Regular database
-├── companies             (workspace metadata + email config)
-├── users                 (employee records, roles, hashed passwords)
-├── audit_logs            (compliance trail)
-└── knowledge_vectors     (public documents — all roles)
-
-nova_ai_confidential      ← Confidential database
-└── knowledge_vectors     (private documents — managers+ only)
+MongoDB Atlas
+│
+├── nova_ai                    (Public)
+│   ├── companies
+│   ├── users
+│   ├── audit_logs
+│   └── knowledge_vectors      ← all roles can search here
+│
+└── nova_ai_confidential       (Confidential)
+    └── knowledge_vectors      ← manager / admin only
 ```
 
-> **Security guarantee:** An employee request physically **never touches** `nova_ai_confidential`. It is not filtered — it is simply never queried.
+Employee code **never connects** to `nova_ai_confidential`. It is not filtered — it is literally never queried.
 
-### Role-Based Access Control (RBAC)
+### Role Access
 
-| Role | Public DB | Confidential DB | Admin Actions |
-|---|---|---|---|
-| `employee` | ✅ | ❌ Never queried | ❌ |
-| `team_lead` | ✅ | ✅ | ❌ |
-| `manager` | ✅ | ✅ | ❌ |
-| `admin` | ✅ | ✅ | ✅ invite, ingest, config |
+| Role | Public DB | Confidential DB | Dashboard |
+|:---|:---:|:---:|:---:|
+| `employee` | ✅ | ✗ | ✗ |
+| `team_lead` | ✅ | ✅ | ✗ |
+| `manager` | ✅ | ✅ | ✗ |
+| `admin` | ✅ | ✅ | ✅ |
 
 ### Authentication
 
-| User type | Login method | Token |
-|---|---|---|
-| **Admin** | `join_code + email + password` | Nova JWT (12h) |
-| **Manager / Team Lead** | `join_code + email + password` | Nova JWT (12h) |
-| **Employee** | `join_code + email + password` | Nova JWT (12h) |
-| **Developer** | Clerk (internal only) | Clerk JWT |
+All company users log in with: **join code + email + password → Nova JWT**
+
+No third-party SSO required for company users. Clerk is used only for developer/platform tooling.
 
 ---
 
-## 🚀 Quick Start
+## Getting Started
 
-### Prerequisites
-- Python 3.11+
-- MongoDB Atlas account (free M0 tier works)
-- OpenAI API key
-
-### 1. Clone & Install
+### 1 — Clone & Install
 
 ```bash
 git clone https://github.com/SAGARRAMBADE21/Nova-AI-.git
@@ -124,167 +131,190 @@ cd Nova-AI-/enterprise_ai
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+### 2 — Environment Setup
 
 ```bash
 cp .env.example .env
-# Fill in your values
 ```
 
-Minimum required:
+Fill in the required values:
+
 ```env
+# OpenAI
 OPENAI_API_KEY=sk-proj-...
+OPENAI_MODEL=gpt-4
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+
+# MongoDB Atlas
 MONGODB_URI=mongodb+srv://<user>:<pass>@cluster0.xxxxx.mongodb.net/
-NOVA_JWT_SECRET=<run: python -c "import secrets; print(secrets.token_hex(32))">
+MONGODB_DB_NAME=nova_ai
+MONGODB_CONFIDENTIAL_DB_NAME=nova_ai_confidential
+
+# JWT Secret (generate with the command below)
+NOVA_JWT_SECRET=<your-secret>
 ```
 
-### 3. MongoDB Atlas — Vector Search Index
+Generate a secure JWT secret:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
 
-Create this index on `knowledge_vectors` in **both** `nova_ai` and `nova_ai_confidential`:
+### 3 — MongoDB Vector Search Index
+
+In Atlas → Atlas Search → Create Index → **Vector Search** → JSON Editor
+
+Apply this to `knowledge_vectors` in **both** `nova_ai` and `nova_ai_confidential`:
 
 ```json
 {
   "fields": [
-    { "type": "vector", "path": "embedding", "numDimensions": 1536, "similarity": "cosine" },
+    {
+      "type": "vector",
+      "path": "embedding",
+      "numDimensions": 1536,
+      "similarity": "cosine"
+    },
     { "type": "filter", "path": "tenant_id" },
     { "type": "filter", "path": "db_type" }
   ]
 }
 ```
 
-Index name: `vector_index`
+> Index name must be exactly: `vector_index`
 
-### 4. Run
+### 4 — Run
 
 ```bash
 python api/server.py
-# → http://localhost:8000/docs
 ```
+
+Open `http://localhost:8000/docs` for the interactive API explorer.
 
 ---
 
-## 📡 API Endpoints
+## API Reference
 
 | Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/onboard` | 🔓 Public | Company owner creates workspace + admin account |
-| `POST` | `/register` | 🔓 Public | First-time user sets their password |
-| `POST` | `/join` | 🔓 Public | Login → returns Nova JWT |
-| `GET` | `/health` | 🔓 Public | Health check |
-| `POST` | `/chat` | 🔒 Nova JWT | Ask ARIA a question |
-| `POST` | `/ingest` | 🔒 Admin JWT | Upload document (public or confidential) |
-| `POST` | `/invite-user` | 🔒 Admin JWT | Add employee + send invite email |
-| `POST` | `/email-config` | 🔒 Admin JWT | Set admin Gmail for sending invites |
-| `GET` | `/users` | 🔒 Admin JWT | List all workspace users |
-| `GET` | `/metrics` | 🔒 Any JWT | LLMOps performance metrics |
+|:---|:---|:---:|:---|
+| `POST` | `/onboard` | public | Create company workspace |
+| `POST` | `/register` | public | First-time password setup |
+| `POST` | `/join` | public | Login → returns JWT |
+| `GET` | `/health` | public | Server health check |
+| `POST` | `/chat` | JWT | Ask a question |
+| `POST` | `/ingest` | admin | Upload document to public or confidential DB |
+| `POST` | `/invite-user` | admin | Add user + send invite email |
+| `POST` | `/email-config` | admin | Set Gmail for sending invite emails |
+| `GET` | `/users` | admin | List all workspace users |
+| `GET` | `/metrics` | JWT | LLMOps performance stats |
 
-### Complete User Flow
+---
 
-**1. Company owner creates workspace:**
+## Complete Workflow
+
+### Step 1 — Company owner signs up
 ```bash
 curl -X POST http://localhost:8000/onboard \
-  -d '{"company_name":"Acme Corp","admin_email":"admin@acme.com","admin_password":"SecurePass123"}'
-# Returns: join_code (e.g. "ACMEXK7P12")
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_name":   "Acme Corp",
+    "admin_email":    "admin@acme.com",
+    "admin_password": "SecurePass123"
+  }'
+```
+```json
+{
+  "join_code": "ACMEXK7P12",
+  "tenant_id": "tenant_a1b2c3d4...",
+  "message":   "Workspace created! Share the join code with your team."
+}
 ```
 
-**2. Admin configures email (so invites send from their Gmail):**
+### Step 2 — Admin configures Gmail for invites
 ```bash
 curl -X POST http://localhost:8000/email-config \
   -H "Authorization: Bearer <admin_jwt>" \
-  -d '{"sender_email":"admin@gmail.com","sender_password":"abcd efgh ijkl mnop"}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "sender_email":    "admin@gmail.com",
+    "sender_password": "abcd efgh ijkl mnop"
+  }'
 ```
 
-**3. Admin invites an employee (sends real email):**
+> Get an App Password at `myaccount.google.com → Security → App Passwords`
+
+### Step 3 — Admin invites an employee (email sent automatically)
 ```bash
 curl -X POST http://localhost:8000/invite-user \
   -H "Authorization: Bearer <admin_jwt>" \
-  -d '{"email":"john@acme.com","role":"employee"}'
-# John receives email with join code + registration steps
+  -H "Content-Type: application/json" \
+  -d '{ "email": "john@acme.com", "role": "employee" }'
 ```
 
-**4. John registers:**
+John receives an email with the join code and registration steps.
+
+### Step 4 — John registers
 ```bash
 curl -X POST http://localhost:8000/register \
-  -d '{"join_code":"ACMEXK7P12","email":"john@acme.com","password":"MyPass123"}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "join_code": "ACMEXK7P12",
+    "email":     "john@acme.com",
+    "password":  "MyPassword123"
+  }'
 ```
 
-**5. John logs in:**
+### Step 5 — John logs in
 ```bash
 curl -X POST http://localhost:8000/join \
-  -d '{"join_code":"ACMEXK7P12","email":"john@acme.com","password":"MyPass123"}'
-# Returns: { "token": "eyJ..." }
+  -H "Content-Type: application/json" \
+  -d '{
+    "join_code": "ACMEXK7P12",
+    "email":     "john@acme.com",
+    "password":  "MyPassword123"
+  }'
+```
+```json
+{ "token": "eyJhbGci...", "role": "employee" }
 ```
 
-**6. John chats with ARIA:**
+### Step 6 — John chats with ARIA
 ```bash
 curl -X POST http://localhost:8000/chat \
   -H "Authorization: Bearer <john_jwt>" \
-  -d '{"prompt":"What is our annual leave policy?"}'
+  -H "Content-Type: application/json" \
+  -d '{ "prompt": "What is our annual leave policy?" }'
 ```
 
 ---
 
-## 🤖 5-Agent Pipeline
-
-```
-User Query
-    │
-    ▼
-┌─────────────────┐
-│ SecurityAgent   │  ← RBAC: resolves allowed_db_types from role
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ RetrievalAgent  │  ← MongoDB Atlas Vector Search (tenant + role scoped)
-│                 │    + NetworkX Knowledge Graph + Web fallback
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ValidationAgent  │  ← Confidence scoring, conflict detection, HITL trigger
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│  ToolAgent      │  ← Detects plugin actions (email, calendar, Drive...)
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│    GPT-4        │  ← Final answer with RAG context injected
-└─────────────────┘
-```
-
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 enterprise_ai/
-├── main.py                    # Core assistant + CLI
-├── requirements.txt
-├── .env.example
 │
 ├── api/
-│   └── server.py              # FastAPI — all endpoints
+│   └── server.py              API endpoints + unified auth dependency
 │
 ├── db/
-│   └── mongodb.py             # TenantManager + TenantVectorStore
-│                              # (password hashing, email config encryption)
+│   └── mongodb.py             TenantManager · TenantVectorStore
+│                              Password hashing · Email config encryption
 │
 ├── security/
-│   ├── nova_jwt.py            # Employee JWT (HS256, join code flow)
-│   ├── clerk_auth.py          # Clerk JWT (developer-only)
-│   ├── rbac.py                # Role → db_type mapping
-│   └── lakera_guard.py        # Prompt injection + PII protection
+│   ├── nova_jwt.py            Employee JWT (HS256)
+│   ├── clerk_auth.py          Clerk JWT (developer-only)
+│   ├── rbac.py                Role → DB scope mapping
+│   └── lakera_guard.py        Prompt injection · PII protection
 │
 ├── core/
-│   ├── rag.py                 # SelfCorrectingRAG (dual DB aware)
-│   ├── hitl.py                # Human-in-the-loop controller
-│   └── web_scraper.py
+│   ├── rag.py                 SelfCorrectingRAG (dual-DB aware)
+│   ├── hitl.py                Human-in-the-loop controller
+│   └── web_scraper.py         Web fallback retrieval
 │
 ├── agents/
-│   └── multi_agent.py         # 5-agent orchestration
+│   └── multi_agent.py         5-agent orchestration pipeline
 │
 ├── data/
-│   └── ingestion.py           # File parsing + dual-DB routing
+│   └── ingestion.py           File parsing · Dual-DB routing
 │
 ├── plugins/
 │   ├── registry.py
@@ -295,68 +325,56 @@ enterprise_ai/
 │   ├── google_calendar.py
 │   └── google_meet.py
 │
-└── utils/
-    ├── email_sender.py        # SMTP invite emails (from admin's Gmail)
-    └── llmops.py              # Interaction logging + metrics
+├── utils/
+│   ├── email_sender.py        SMTP invite emails (admin's Gmail)
+│   └── llmops.py              Interaction logging · Metrics
+│
+├── main.py                    Core assistant class · CLI demo
+├── requirements.txt
+└── .env.example
 ```
 
 ---
 
-## 🔒 Security Features
-
-| Feature | Implementation |
-|---|---|
-| **Password Auth** | PBKDF2-SHA256 (200k rounds) — no external libs |
-| **JWT** | Nova HS256 JWT (12h expiry) per user session |
-| **Tenant Isolation** | All DB queries filtered by `tenant_id` |
-| **Dual DB** | Physical separation — employee code never touches confidential DB |
-| **RBAC** | Role in JWT → db scope resolved per request |
-| **Email Encryption** | Admin Gmail App Password encrypted with Fernet before storing |
-| **Prompt Injection** | Lakera Guard scans all inputs |
-| **PII Protection** | Lakera Guard strips PII from logs |
-| **Audit Logs** | Every interaction logged to MongoDB (tenant-scoped) |
-| **HITL** | Low-confidence answers escalated to human review |
-
----
-
-## ⚙️ Environment Variables
+## Environment Variables
 
 | Variable | Required | Description |
-|---|---|---|
+|:---|:---:|:---|
 | `OPENAI_API_KEY` | ✅ | OpenAI API key |
-| `OPENAI_MODEL` | ✅ | LLM model (`gpt-4`) |
-| `OPENAI_EMBEDDING_MODEL` | ✅ | Embedding model (`text-embedding-3-small`) |
-| `MONGODB_URI` | ✅ | MongoDB Atlas connection string |
-| `MONGODB_DB_NAME` | ✅ | Public DB (default: `nova_ai`) |
-| `MONGODB_CONFIDENTIAL_DB_NAME` | ✅ | Confidential DB (default: `nova_ai_confidential`) |
-| `NOVA_JWT_SECRET` | ✅ | Secret for signing employee JWTs |
-| `CLERK_PUBLISHABLE_KEY` | Dev only | Clerk (developer internal use) |
-| `CLERK_SECRET_KEY` | Dev only | Clerk (developer internal use) |
-| `CLERK_JWKS_URL` | Dev only | Clerk JWKS URL |
-| `LAKERA_API_KEY` | Optional | Lakera Guard prompt injection protection |
-| `LOG_LEVEL` | Optional | Logging level (default: `INFO`) |
-
-> **Note:** Email credentials (`EMAIL_USER`, `EMAIL_PASSWORD`) are optional platform fallbacks. Each company admin sets their own Gmail via `POST /email-config` from the dashboard.
+| `OPENAI_MODEL` | ✅ | LLM model (default: `gpt-4`) |
+| `OPENAI_EMBEDDING_MODEL` | ✅ | Embedding model |
+| `MONGODB_URI` | ✅ | Atlas connection string |
+| `MONGODB_DB_NAME` | ✅ | Public DB name |
+| `MONGODB_CONFIDENTIAL_DB_NAME` | ✅ | Confidential DB name |
+| `NOVA_JWT_SECRET` | ✅ | JWT signing secret |
+| `CLERK_PUBLISHABLE_KEY` | dev | Clerk (developer use only) |
+| `CLERK_SECRET_KEY` | dev | Clerk (developer use only) |
+| `CLERK_JWKS_URL` | dev | Clerk JWKS URL |
+| `LAKERA_API_KEY` | optional | Lakera Guard API key |
+| `LOG_LEVEL` | optional | Logging level (default: `INFO`) |
+| `DEV_TENANT_ID` | dev | Mock tenant for local testing |
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
-- [ ] Next.js Admin Dashboard (document upload, user management, email config)
-- [ ] Employee Chat Interface (frontend)
-- [ ] Slack / Notion plugin
-- [ ] OpenTelemetry + Grafana metrics
-- [ ] Document version control
+- [ ] Next.js Admin Dashboard — document upload, user management, email config UI
+- [ ] Employee Chat Interface — responsive frontend
+- [ ] Slack / Notion plugin integration
+- [ ] OpenTelemetry + Grafana metrics dashboard
+- [ ] Document version control + re-ingestion
 - [ ] Multi-language support
 
 ---
 
-## 📄 License
+## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE)
 
 ---
 
 <div align="center">
-  <strong>Built with ❤️ for enterprise teams who deserve better AI tools.</strong>
+<br />
+Built with ❤️ for enterprise teams who deserve better AI tools.
+<br /><br />
 </div>
