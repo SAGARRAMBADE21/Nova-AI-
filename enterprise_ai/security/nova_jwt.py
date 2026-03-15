@@ -1,16 +1,15 @@
 """
 security/nova_jwt.py
-Nova AI — Custom JWT for employee login (no Clerk required).
+Nova AI — Custom JWT for ALL company users (no Clerk required).
 
 Flow:
-  1. Employee enters join_code + email  →  POST /join
-  2. Backend verifies against MongoDB users collection
+  1. User enters join_code + email + password  →  POST /join
+  2. Backend verifies credentials against MongoDB
   3. Backend issues a Nova-signed JWT (HS256, NOVA_JWT_SECRET)
-  4. Employee uses this token as Bearer on POST /chat
+  4. User uses this token as Bearer on all protected endpoints
 
-Admin/Manager/TeamLead still use Clerk JWT (RS256).
-The unified `get_current_user` dependency in server.py
-tries Clerk JWT first, falls back to Nova JWT.
+All roles (employee, team_lead, manager, admin) use Nova JWT.
+Clerk JWT is used only by developers for internal tooling.
 """
 
 import os
@@ -39,24 +38,30 @@ def _secret() -> str:
 
 # ── Issue token ───────────────────────────────────────────────────────────
 
-def create_employee_token(email: str, tenant_id: str, role: str) -> str:
+def create_employee_token(email:        str,
+                          tenant_id:    str,
+                          role:         str,
+                          company_name: str = "") -> str:
     """
-    Issue a signed JWT for an employee who logged in via join code + email.
-    Token is signed with NOVA_JWT_SECRET (HS256) — not Clerk.
+    Issue a signed JWT for a user who logged in via join code + email + password.
+    Token is signed with NOVA_JWT_SECRET (HS256).
+    All company roles use this token: employee, team_lead, manager, admin.
     """
     expire = datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_H)
     payload = {
-        "sub":       email,
-        "email":     email,
-        "tenant_id": tenant_id,
-        "role":      role,
-        "iss":       "nova-ai",          # issuer flag — tells auth layer it's a Nova token
-        "exp":       expire,
+        "sub":          email,
+        "email":        email,
+        "tenant_id":    tenant_id,
+        "role":         role,
+        "company_name": company_name,   # included for context-aware responses
+        "iss":          "nova-ai",       # issuer flag — identifies as a Nova token
+        "exp":          expire,
     }
     token = jwt.encode(payload, _secret(), algorithm=ALGORITHM)
     logger.info(
         f"[NovaJWT] Token issued | email={email} | "
-        f"tenant={tenant_id} | role={role} | expires={expire.isoformat()}"
+        f"tenant={tenant_id} | role={role} | company={company_name} "
+        f"| expires={expire.isoformat()}"
     )
     return token
 
