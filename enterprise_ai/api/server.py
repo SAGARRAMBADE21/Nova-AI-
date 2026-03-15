@@ -66,13 +66,19 @@ async def get_current_user(
     # 2. Fall back to Clerk JWT (admin / manager path)
     return verify_clerk_token(credentials)
 
+# ── Auth note ────────────────────────────────────────────────────────────
+# Clerk is used ONLY by developers for internal platform management.
+# ALL company users (admin, manager, team_lead, employee) authenticate via:
+#   POST /join  { join_code, email, password }  →  Nova JWT
+# ───────────────────────────────────────────────────────────────────────
 
 # ── Request / Response Models ─────────────────────────────────────────────
 
 class OnboardRequest(BaseModel):
-    company_name: str
-    admin_email:  str
-    tenant_id:    str          # Clerk Organization ID (org_id)
+    company_name:   str
+    admin_email:    str
+    admin_password: str     # admin sets their password at registration time
+    # tenant_id is auto-generated — no Clerk required
 
 class InviteUserRequest(BaseModel):
     email: str
@@ -109,15 +115,50 @@ class RegisterRequest(BaseModel):
 @app.post("/onboard")
 async def onboard(request: OnboardRequest):
     """
-    Create a new company workspace.
-    Called once by the company owner when they first sign up.
+    Company owner creates their workspace on Nova AI.
+    No Clerk required — generates tenant_id automatically.
+
+    Returns join_code — share this code with your team.
+    Admin can immediately login via POST /join with their email + password.
     """
+    import uuid
+
+    if len(request.admin_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Admin password must be at least 8 characters."
+        )
+
+    # Auto-generate a unique tenant ID (no Clerk needed)
+    tenant_id = f"tenant_{uuid.uuid4().hex[:16]}"
+
+    # Create company workspace
     result = assistant.onboard_company(
-        company_name = request.company_name,
-        admin_email  = request.admin_email,
-        tenant_id    = request.tenant_id,
+        company_name   = request.company_name,
+        admin_email    = request.admin_email,
+        tenant_id      = tenant_id,
     )
-    return result
+
+    # Create admin user with hashed password in MongoDB
+    assistant.tenant_manager.add_user(
+        tenant_id = tenant_id,
+        email     = request.admin_email.lower().strip(),
+        role      = "admin",
+    )
+    assistant.tenant_manager.set_password(
+        tenant_id = tenant_id,
+        email     = request.admin_email.lower().strip(),
+        password  = request.admin_password,
+    )
+
+    return {
+        "company_name": result["company_name"],
+        "tenant_id":    tenant_id,
+        "join_code":    result["join_code"],
+        "message":      f"Workspace created! Share join code '"
+                        f"{result['join_code']}' with your team. "
+                        f"Login via POST /join with your email and password.",
+    }
 
 
 @app.get("/health")
