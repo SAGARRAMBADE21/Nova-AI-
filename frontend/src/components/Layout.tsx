@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, FileText, Mail, BarChart3, 
-  MessageSquare, LogOut, Zap
+  MessageSquare, LogOut
 } from 'lucide-react';
 
 const Layout = () => {
@@ -71,9 +71,6 @@ const Layout = () => {
           </NavLink>
           <NavLink to="/dashboard/metrics" className={navLinkClass}>
             <BarChart3 className="mr-3 h-5 w-5" /> Metrics
-          </NavLink>
-          <NavLink to="/dashboard/tools" className={navLinkClass}>
-            <Zap className="mr-3 h-5 w-5" /> Tools
           </NavLink>
         </nav>
 
