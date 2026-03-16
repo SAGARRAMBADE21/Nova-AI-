@@ -11,9 +11,17 @@ import os
 import time
 import uuid
 import logging
+from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 from openai import OpenAI
+
+# Load .env from the enterprise_ai/ directory regardless of where uvicorn is launched from
+_ENV_FILE = Path(__file__).parent / ".env"
+if _ENV_FILE.exists():
+    load_dotenv(dotenv_path=_ENV_FILE, override=True)
+else:
+    load_dotenv()  # fallback
 from security.lakera_guard import LakeraGuard
 from security.rbac          import RBACController, Role
 from core.rag               import KnowledgeGraph, SelfCorrectingRAG, ConfidenceLevel
