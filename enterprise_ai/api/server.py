@@ -109,6 +109,7 @@ class ChatResponse(BaseModel):
     tenant_id:  str
     role:       str
     sources:    list = []
+    tools_used: list = []   # [{plugin, action, success, message}]
 
 class IngestRequest(BaseModel):
     file_path: str

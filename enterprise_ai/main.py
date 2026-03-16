@@ -208,6 +208,45 @@ class EnterpriseAIAssistant:
 
         logger.info("[Assistant] All components ready.")
 
+    # ── Tool schema builder ───────────────────────────────────────────────
+
+    def _build_openai_tools(self) -> list:
+        """
+        Convert every plugin's ActionSchema into OpenAI function-calling format.
+        Only returns tools when Google credentials are available (connected).
+        """
+        token_file = os.getenv("GOOGLE_TOKEN_FILE", "./enterprise_ai/credentials/google_token.json")
+        if not os.path.exists(token_file):
+            return []   # No token — don't expose tool schemas
+
+        openai_tools = []
+        for plugin_name in self.plugins.list_plugins():
+            for schema in self.plugins.get_schema(plugin_name):
+                properties: dict = {}
+                required_params: list = []
+                for p in schema.params:
+                    prop: dict = {"type": p.type if p.type != "integer" else "number",
+                                  "description": p.description}
+                    if p.choices:
+                        prop["enum"] = p.choices
+                    properties[p.name] = prop
+                    if p.required:
+                        required_params.append(p.name)
+
+                openai_tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": f"{plugin_name}__{schema.action}",   # e.g. gmail__send_email
+                        "description": f"[{plugin_name}] {schema.description}",
+                        "parameters": {
+                            "type": "object",
+                            "properties": properties,
+                            "required": required_params,
+                        },
+                    }
+                })
+        return openai_tools
+
     # ── Main chat interface ───────────────────────────────────────────────
 
     def chat(self, user_prompt: str,
@@ -342,30 +381,97 @@ class EnterpriseAIAssistant:
             f"Confidence Level of Retrieved Context: [{confidence_val}]"
         )
 
-        # ── LLM Call ──────────────────────────────────────────────────────
+        # ── LLM Call with OpenAI Function Calling ─────────────────────────
         if not self.openai:
             return (
                 "OpenAI API key is not configured. "
                 "Please set OPENAI_API_KEY in your .env file."
             )
+
+        # Build available tools (empty list if not connected)
+        openai_tools = self._build_openai_tools()
+
         try:
             # Build messages list with conversation history for multi-turn memory
             messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-            # Inject prior turns (up to last 10 to keep context window manageable)
             if history:
                 for turn in history[-10:]:
                     if turn.get("role") in ("user", "assistant") and turn.get("content"):
                         messages.append({"role": turn["role"], "content": turn["content"]})
             messages.append({"role": "user", "content": user_message})
 
-            llm_response = self.openai.chat.completions.create(
-                model       = os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                messages    = messages,
-                temperature = 0.2,
-                max_tokens  = 1500,
-            )
-            llm_output  = llm_response.choices[0].message.content or ""
-            token_count = llm_response.usage.total_tokens if llm_response.usage else 0
+            model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            token_count = 0
+            MAX_TOOL_ROUNDS = 5  # prevent infinite loops
+
+            for _round in range(MAX_TOOL_ROUNDS):
+                call_kwargs: dict = dict(
+                    model=model,
+                    messages=messages,
+                    temperature=0.2,
+                    max_tokens=1500,
+                )
+                if openai_tools:
+                    call_kwargs["tools"] = openai_tools
+                    call_kwargs["tool_choice"] = "auto"
+
+                llm_response = self.openai.chat.completions.create(**call_kwargs)
+                token_count += llm_response.usage.total_tokens if llm_response.usage else 0
+                choice = llm_response.choices[0]
+                finish = choice.finish_reason  # 'stop' | 'tool_calls' | 'length'
+                assistant_msg = choice.message
+
+                # Append assistant message to running context
+                messages.append(assistant_msg.model_dump(exclude_unset=True))
+
+                # No tool calls requested — final answer
+                if finish != "tool_calls" or not assistant_msg.tool_calls:
+                    llm_output = assistant_msg.content or ""
+                    break
+
+                # ── Execute each requested tool call ──────────────────────
+                for tc in assistant_msg.tool_calls:
+                    fn_name   = tc.function.name          # e.g. "gmail__send_email"
+                    fn_args_s = tc.function.arguments     # JSON string from LLM
+                    import json as _json
+                    try:
+                        fn_args = _json.loads(fn_args_s) if fn_args_s else {}
+                    except Exception:
+                        fn_args = {}
+
+                    # Split plugin__action
+                    if "__" in fn_name:
+                        plugin_name, action_name = fn_name.split("__", 1)
+                    else:
+                        plugin_name, action_name = fn_name, ""
+
+                    logger.info(
+                        f"[Assistant] Tool call: {plugin_name}.{action_name}() "
+                        f"params={list(fn_args.keys())}"
+                    )
+
+                    result = self.plugins.execute(plugin_name, action_name, params=fn_args)
+                    tool_results.append(result)
+                    self.metrics.record_tool()
+                    self.llmops.log_tool_invocation(
+                        plugin_name, action_name, result.success, user_id
+                    )
+
+                    # Append tool result so LLM can see it
+                    tool_content = _json.dumps(result.to_dict(), default=str)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": tool_content,
+                    })
+            else:
+                # Exceeded MAX_TOOL_ROUNDS — force a final answer
+                messages.append({"role": "user", "content": "Please provide your final answer now."})
+                fr = self.openai.chat.completions.create(
+                    model=model, messages=messages, temperature=0.2, max_tokens=800
+                )
+                llm_output = fr.choices[0].message.content or ""
+
         except Exception as e:
             logger.error(f"[Assistant] LLM error: {e}")
             self.metrics.record_error()
