@@ -10,9 +10,16 @@ const Chat = () => {
   const [isConfidential, setIsConfidential] = useState(false);
   const navigate = useNavigate();
 
+  const userEmail   = localStorage.getItem('nova_email')   ?? localStorage.getItem('nova_token') ? '' : 'user@company.com';
+  const userRole    = localStorage.getItem('nova_role')    ?? 'employee';
+  const userCompany = localStorage.getItem('nova_company') ?? 'Your Workspace';
+  const initials    = userEmail ? userEmail.slice(0, 2).toUpperCase() : 'ME';
+
   const handleLogout = () => {
-    localStorage.removeItem("nova_token");
-    localStorage.removeItem("nova_role");
+    localStorage.removeItem('nova_token');
+    localStorage.removeItem('nova_role');
+    localStorage.removeItem('nova_company');
+    localStorage.removeItem('nova_email');
     navigate('/login');
   };
 
@@ -121,10 +128,10 @@ const Chat = () => {
 
         <div className="p-4 border-t border-brand-border space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-brand-charcoal text-white flex items-center justify-center font-bold text-sm">JD</div>
+            <div className="w-10 h-10 rounded-full bg-brand-charcoal text-white flex items-center justify-center font-bold text-sm">{initials}</div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-brand-charcoal truncate">john.doe@acme.com</div>
-              <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 rounded-full uppercase tracking-wider">Manager</span>
+              <div className="text-sm font-semibold text-brand-charcoal truncate">{userEmail || '—'}</div>
+              <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 rounded-full uppercase tracking-wider">{userRole}</span>
             </div>
           </div>
           <button className="flex items-center gap-2 text-sm font-medium text-brand-charcoal hover:text-brand-orange transition-colors" onClick={() => navigate('/dashboard')}>
@@ -143,7 +150,7 @@ const Chat = () => {
         <header className="h-16 border-b border-brand-border px-8 flex items-center justify-between bg-white/80 backdrop-blur-md z-10 shrink-0">
           <div className="flex flex-col">
             <h1 className="text-sm font-bold text-brand-charcoal uppercase tracking-wider">AI ASSISTANT</h1>
-            <p className="text-[11px] text-gray-400">Acme Corporation Workspace</p>
+            <p className="text-[11px] text-gray-400">{userCompany} Workspace</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-brand-lightGray p-1 rounded-full border border-brand-border">

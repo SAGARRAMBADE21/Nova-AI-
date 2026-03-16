@@ -27,6 +27,7 @@ const Login = () => {
       localStorage.setItem('nova_token',   result.token);
       localStorage.setItem('nova_role',    result.role);
       localStorage.setItem('nova_company', result.company_name);
+      localStorage.setItem('nova_email',   formData.email.trim().toLowerCase());
       navigate('/dashboard');
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Login failed. Is the backend running?');

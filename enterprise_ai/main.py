@@ -450,6 +450,19 @@ class EnterpriseAIAssistant:
     def list_users(self, tenant_id: str) -> list:
         return self.tenant_manager.list_users(tenant_id)
 
+    # ── Admin: list documents ─────────────────────────────────────────────
+
+    def list_documents(self, tenant_id: str) -> list:
+        """Return merged list of ingested source files across both DBs."""
+        public  = self.public_store.list_documents(tenant_id)
+        private = self.private_store.list_documents(tenant_id)
+        seen, result = set(), []
+        for doc in public + private:
+            if doc["source"] not in seen:
+                seen.add(doc["source"])
+                result.append(doc)
+        return sorted(result, key=lambda x: x.get("ingested_at", ""), reverse=True)
+
     # ── Admin: ingest document ────────────────────────────────────────────
 
     def ingest_document(self, file_path: str,

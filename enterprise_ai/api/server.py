@@ -16,13 +16,16 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import uvicorn
 import os
 import httpx
+import tempfile
+import shutil
+import pathlib
 
 from main import EnterpriseAIAssistant
 from security.rbac import Role
@@ -428,10 +431,10 @@ async def set_email_config(
 
     if "@" not in request.sender_email:
         raise HTTPException(status_code=400, detail="Invalid email address.")
-    if len(request.sender_password.replace(" ", "")) < 16:
+    if len(request.sender_password.replace(" ", "")) < 8:
         raise HTTPException(
             status_code=400,
-            detail="Gmail App Password must be 16 characters. "
+            detail="Gmail App Password must be at least 8 characters. "
                    "Get it at myaccount.google.com → Security → App Passwords."
         )
 
@@ -452,6 +455,59 @@ async def metrics(
 ):
     """LLMOps metrics — scoped to the authenticated tenant."""
     return assistant.get_metrics()
+
+
+@app.post("/upload")
+async def upload_document(
+    file:     UploadFile = File(...),
+    category: str        = Form("general"),
+    db_type:  str        = Form("public"),
+    token:    ClerkTokenPayload = Depends(get_current_user),
+):
+    """
+    Admin-only: upload a file directly from the browser.
+    Saves to a temp file, runs the ingestion pipeline, then deletes the temp file.
+    """
+    if token.role != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Only admins can upload documents.")
+    if db_type not in ("public", "private"):
+        raise HTTPException(status_code=400,
+                            detail="db_type must be 'public' or 'private'.")
+
+    suffix   = pathlib.Path(file.filename or "upload").suffix or ".bin"
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+
+        result = assistant.ingest_document(
+            file_path   = tmp_path,
+            tenant_id   = token.tenant_id,
+            category    = category,
+            uploaded_by = token.user_id,
+            db_type     = db_type,
+        )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    if result.get("status") == "failed":
+        raise HTTPException(status_code=400, detail=result.get("reason"))
+    if result.get("status") == "blocked":
+        raise HTTPException(status_code=422, detail=result.get("reason"))
+
+    return result
+
+
+@app.get("/documents")
+async def list_documents(
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """List all ingested source files for this tenant (both DBs)."""
+    docs = assistant.list_documents(token.tenant_id)
+    return {"documents": docs}
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────

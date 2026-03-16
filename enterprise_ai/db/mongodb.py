@@ -393,6 +393,31 @@ class TenantVectorStore:
 
     # ── Delete ────────────────────────────────────────────────────────────
 
+    def list_documents(self, tenant_id: str) -> List[dict]:
+        """Return one summary row per ingested source file for this tenant."""
+        pipeline = [
+            {"$match": {"tenant_id": tenant_id}},
+            {"$group": {
+                "_id":        "$source",
+                "db_type":    {"$first": "$db_type"},
+                "category":   {"$first": "$category"},
+                "ingested_at": {"$max": "$ingested_at"},
+            }},
+            {"$project": {
+                "source":     "$_id",
+                "db_type":    1,
+                "category":   1,
+                "ingested_at": 1,
+                "_id":        0,
+            }},
+            {"$sort": {"ingested_at": -1}},
+        ]
+        try:
+            return list(self.col.aggregate(pipeline))
+        except Exception as e:
+            logger.error(f"[TenantVectorStore] list_documents error: {e}")
+            return []
+
     def delete_tenant_data(self, tenant_id: str) -> int:
         """Remove all vector data for a tenant (GDPR / offboarding)."""
         result = self.col.delete_many({"tenant_id": tenant_id})

@@ -134,6 +134,39 @@ export function setEmailConfig(data: EmailConfigPayload) {
   return request<{ message: string; sender: string }>('/email-config', { method: 'POST', body: data });
 }
 
+// ── Documents ─────────────────────────────────────────────────────────────
+
+export interface Document {
+  source: string;
+  db_type: string;
+  category: string;
+  ingested_at: string;
+}
+
+export async function uploadDocument(file: File, category: string, dbType: string) {
+  const token = getToken();
+  const form = new FormData();
+  form.append('file', file);
+  form.append('category', category);
+  form.append('db_type', dbType);
+
+  const res = await fetch(`${BASE_URL}/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export function listDocuments() {
+  return request<{ documents: Document[] }>('/documents');
+}
+
 // ── Health ────────────────────────────────────────────────────────────────
 
 export function healthCheck() {
