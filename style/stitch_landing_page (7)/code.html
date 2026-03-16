@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+
+<html class="h-full bg-white" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Admin Dashboard | QueryMind</title>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<!-- Chart.js for Metrics -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#FF5925',
+              hover: '#FF7A47',
+            },
+            charcoal: {
+              DEFAULT: '#1A1A1A',
+            },
+            surface: {
+              DEFAULT: '#F5F5F5',
+              card: '#FFFFFF',
+            },
+            border: '#E5E7EB',
+            body: '#666666'
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          borderRadius: {
+            '2xl': '20px',
+            '3xl': '28px',
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-styling">
+    body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+    .sidebar-active { 
+      border-left: 2px solid #FF5925; 
+      background-color: #EBEBEB; 
+      color: #1A1A1A !important; 
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
+    
+    /* Animation for the active session pulse */
+    @keyframes pulse-green {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+    }
+    .pulse-dot { animation: pulse-green 2s infinite; }
+
+    /* Tab Visibility */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body class="h-full flex text-body overflow-hidden">
+<!-- BEGIN: LeftSidebar -->
+<aside class="w-64 flex-shrink-0 bg-surface border-r border-border flex flex-col h-full z-30" data-purpose="sidebar">
+<!-- Logo Section -->
+<div class="h-16 flex items-center px-6 border-b border-border">
+<span class="text-charcoal font-extrabold text-xl tracking-tight">QueryMind</span>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+<button class="nav-btn sidebar-active w-full flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-body hover:text-charcoal group" onclick="switchTab('overview', this)">
+<i class="mr-3 h-5 w-5" data-lucide="layout-dashboard"></i>
+        Overview
+      </button>
+<button class="nav-btn w-full flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-body hover:text-charcoal group" onclick="switchTab('users', this)">
+<i class="mr-3 h-5 w-5" data-lucide="users"></i>
+        Users
+      </button>
+<button class="nav-btn w-full flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-body hover:text-charcoal group" onclick="switchTab('documents', this)">
+<i class="mr-3 h-5 w-5" data-lucide="file-text"></i>
+        Documents
+      </button>
+<button class="nav-btn w-full flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-body hover:text-charcoal group" onclick="switchTab('email-settings', this)">
+<i class="mr-3 h-5 w-5" data-lucide="mail"></i>
+        Email Settings
+      </button>
+<button class="nav-btn w-full flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-body hover:text-charcoal group" onclick="switchTab('metrics', this)">
+<i class="mr-3 h-5 w-5" data-lucide="bar-chart-3"></i>
+        Metrics
+      </button>
+</nav>
+<!-- Bottom Sidebar Section -->
+<div class="p-4 border-t border-border space-y-4">
+<a class="flex items-center text-sm font-semibold text-brand hover:text-brand-hover px-2" href="chat.html">
+<i class="mr-3 h-5 w-5" data-lucide="message-square"></i>
+        Go to Chat
+      </a>
+<div class="flex items-center space-x-3 px-2">
+<div class="h-9 w-9 rounded-full bg-charcoal text-white flex items-center justify-center text-sm font-bold">
+          JD
+        </div>
+<div class="flex-1 min-w-0">
+<p class="text-xs font-semibold text-charcoal truncate">admin@acme.com</p>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-brand">Admin</span>
+</div>
+</div>
+<button class="w-full text-left flex items-center px-2 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors" onclick="handleLogout()">
+<i class="mr-3 h-5 w-5" data-lucide="log-out"></i>
+        Sign Out
+      </button>
+</div>
+</aside>
+<!-- END: LeftSidebar -->
+<!-- BEGIN: MainContent -->
+<main class="flex-1 overflow-y-auto relative custom-scrollbar bg-white">
+<!-- BEGIN: Overview Tab -->
+<section class="tab-content active p-8 md:p-12 max-w-7xl mx-auto" id="overview">
+<header class="mb-10">
+<h1 class="text-3xl font-bold text-charcoal">Workspace Overview</h1>
+<p class="text-body mt-2">Manage your company's AI instance and track activity.</p>
+</header>
+<!-- Stat Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+<div class="p-6 bg-surface border border-border rounded-2xl">
+<p class="text-xs font-bold text-brand uppercase tracking-widest mb-2">Total Users</p>
+<div class="flex items-end justify-between">
+<h2 class="text-4xl font-extrabold text-charcoal">42</h2>
+<div class="text-right text-[11px] text-body">
+<span class="block">32 Employee</span>
+<span class="block">10 Manager</span>
+</div>
+</div>
+</div>
+<div class="p-6 bg-surface border border-border rounded-2xl">
+<p class="text-xs font-bold text-brand uppercase tracking-widest mb-2">Documents</p>
+<div class="flex items-end justify-between">
+<h2 class="text-4xl font-extrabold text-charcoal">128</h2>
+<div class="text-right text-[11px] text-body">
+<span class="block">84 Public</span>
+<span class="block">44 Private</span>
+</div>
+</div>
+</div>
+<div class="p-6 bg-surface border border-border rounded-2xl">
+<p class="text-xs font-bold text-brand uppercase tracking-widest mb-2">Active Sessions</p>
+<div class="flex items-center space-x-4">
+<h2 class="text-4xl font-extrabold text-charcoal">14</h2>
+<div class="h-3 w-3 bg-green-500 rounded-full pulse-dot"></div>
+</div>
+</div>
+<div class="p-6 bg-surface border border-border rounded-2xl">
+<p class="text-xs font-bold text-brand uppercase tracking-widest mb-2">Avg Response</p>
+<div class="flex items-end justify-between">
+<h2 class="text-4xl font-extrabold text-charcoal">1.2<span class="text-lg font-normal ml-1">s</span></h2>
+<div class="text-green-600 text-xs font-bold">↓ 12%</div>
+</div>
+</div>
+</div>
+<!-- Activity Feed -->
+<div>
+<h3 class="text-xl font-bold text-charcoal mb-6">Recent Activity</h3>
+<div class="space-y-4">
+<div class="flex items-start space-x-4 p-4 border-b border-border last:border-0 hover:bg-surface/50 transition-colors rounded-xl">
+<div class="bg-blue-100 p-2 rounded-full"><i class="w-4 h-4 text-blue-600" data-lucide="user-plus"></i></div>
+<div class="flex-1">
+<p class="text-sm font-semibold text-charcoal">john@acme.com <span class="font-normal text-body">invited as Employee</span></p>
+<p class="text-xs text-gray-400 mt-0.5">2 hours ago</p>
+</div>
+</div>
+<div class="flex items-start space-x-4 p-4 border-b border-border last:border-0 hover:bg-surface/50 transition-colors rounded-xl">
+<div class="bg-orange-100 p-2 rounded-full"><i class="w-4 h-4 text-brand" data-lucide="file-up"></i></div>
+<div class="flex-1">
+<p class="text-sm font-semibold text-charcoal">Q3_Report.pdf <span class="font-normal text-body">ingested (Confidential)</span></p>
+<p class="text-xs text-gray-400 mt-0.5">5 hours ago</p>
+</div>
+</div>
+<div class="flex items-start space-x-4 p-4 border-b border-border last:border-0 hover:bg-surface/50 transition-colors rounded-xl">
+<div class="bg-green-100 p-2 rounded-full"><i class="w-4 h-4 text-green-600" data-lucide="shield-check"></i></div>
+<div class="flex-1">
+<p class="text-sm font-semibold text-charcoal">HITL escalation: <span class="font-normal text-body">salary query escalated to Manager</span></p>
+<p class="text-xs text-gray-400 mt-0.5">2 days ago</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Overview Tab -->
+<!-- BEGIN: Users Tab -->
+<section class="tab-content p-8 md:p-12 max-w-7xl mx-auto" id="users">
+<header class="flex justify-between items-end mb-10">
+<div>
+<h1 class="text-3xl font-bold text-charcoal">Team Members <span class="ml-2 text-sm font-bold bg-surface px-3 py-1 rounded-full text-body border border-border">42</span></h1>
+<p class="text-body mt-2">Manage user permissions and invite your colleagues.</p>
+</div>
+</header>
+<!-- Invite Form -->
+<div class="bg-surface p-8 rounded-3xl border border-border mb-12">
+<h3 class="text-lg font-bold text-charcoal mb-4">Invite New Team Member</h3>
+<form class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+<div class="md:col-span-5">
+<label class="block text-xs font-bold text-charcoal mb-2 uppercase tracking-tight">Email Address</label>
+<input class="w-full px-4 py-2.5 bg-white border border-border rounded-xl focus:ring-2 focus:ring-charcoal focus:border-charcoal outline-none transition-all" placeholder="colleague@yourcompany.com" type="email"/>
+</div>
+<div class="md:col-span-4">
+<label class="block text-xs font-bold text-charcoal mb-2 uppercase tracking-tight">Assign Role</label>
+<select class="w-full px-4 py-2.5 bg-white border border-border rounded-xl focus:ring-2 focus:ring-charcoal focus:border-charcoal outline-none transition-all appearance-none">
+<option>Employee</option>
+<option>Manager</option>
+<option>Team Lead</option>
+</select>
+</div>
+<div class="md:col-span-3">
+<button class="w-full bg-charcoal text-white py-2.5 px-6 rounded-full font-bold hover:bg-black transition-all" type="button">
+              Send Invite
+            </button>
+</div>
+</form>
+</div>
+<!-- Users Table -->
+<div class="border border-border rounded-2xl overflow-hidden">
+<div class="p-4 bg-surface border-b border-border flex flex-col md:flex-row gap-4 items-center">
+<div class="relative w-full md:w-96">
+<i class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-body" data-lucide="search"></i>
+<input class="pl-10 pr-4 py-2 bg-white border border-border rounded-lg text-sm w-full focus:ring-2 focus:ring-charcoal outline-none" placeholder="Search by email..." type="text"/>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 text-xs font-bold bg-white border border-border rounded-lg hover:border-charcoal">All Roles</button>
+<button class="px-3 py-1.5 text-xs font-bold bg-white border border-border rounded-lg hover:border-charcoal">Status: All</button>
+</div>
+</div>
+<table class="w-full text-left">
+<thead class="bg-surface text-[10px] uppercase tracking-widest font-bold text-body border-b border-border">
+<tr>
+<th class="px-6 py-4">Email</th>
+<th class="px-6 py-4">Role</th>
+<th class="px-6 py-4">Status</th>
+<th class="px-6 py-4">Date Added</th>
+<th class="px-6 py-4 text-right">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border text-sm">
+<tr class="hover:bg-surface/30 transition-colors">
+<td class="px-6 py-4 text-charcoal font-medium">sarah.lee@acme.com</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600">Manager</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-green-100 text-green-700">Active</span>
+</td>
+<td class="px-6 py-4 text-body">Jan 12, 2025</td>
+<td class="px-6 py-4 text-right">
+<button class="text-red-500 hover:text-red-700 font-bold">Remove</button>
+</td>
+</tr>
+<tr class="hover:bg-surface/30 transition-colors">
+<td class="px-6 py-4 text-charcoal font-medium">dave.jones@acme.com</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-body">Employee</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-yellow-100 text-yellow-700">Invited</span>
+</td>
+<td class="px-6 py-4 text-body">Feb 01, 2025</td>
+<td class="px-6 py-4 text-right">
+<button class="text-red-500 hover:text-red-700 font-bold">Remove</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- END: Users Tab -->
+<!-- BEGIN: Documents Tab -->
+<section class="tab-content p-8 md:p-12 max-w-7xl mx-auto" id="documents">
+<header class="mb-10">
+<h1 class="text-3xl font-bold text-charcoal">Knowledge Base</h1>
+<p class="text-body mt-2">Upload and manage the documents that power your AI.</p>
+</header>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+<!-- Upload Form -->
+<div class="lg:col-span-5 space-y-8">
+<div class="border-2 border-dashed border-border rounded-3xl p-10 text-center hover:border-brand transition-colors cursor-pointer group">
+<div class="bg-surface w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+<i class="text-brand w-8 h-8" data-lucide="upload-cloud"></i>
+</div>
+<h4 class="text-charcoal font-bold">Upload Document</h4>
+<p class="text-sm text-body mt-2 leading-relaxed">Drag &amp; drop files here, or click to browse.<br/><span class="text-xs font-semibold">PDF, DOCX, XLSX, TXT, JSON, MD</span></p>
+</div>
+<div class="space-y-4">
+<div>
+<label class="block text-xs font-bold text-charcoal mb-2 uppercase tracking-tight">Category</label>
+<input class="w-full px-4 py-2.5 bg-white border border-border rounded-xl focus:ring-2 focus:ring-charcoal outline-none" placeholder="e.g. HR, Finance, IT" type="text"/>
+</div>
+<div class="p-4 bg-surface rounded-2xl border border-border">
+<label class="block text-xs font-bold text-charcoal mb-4 uppercase tracking-tight">Access Control</label>
+<div class="space-y-3">
+<label class="flex items-start space-x-3 cursor-pointer">
+<input checked="" class="mt-1 text-charcoal focus:ring-charcoal" name="db_type" type="radio"/>
+<div>
+<span class="block text-sm font-bold text-charcoal">Public Database</span>
+<span class="block text-xs text-body">Visible to all employees</span>
+</div>
+</label>
+<label class="flex items-start space-x-3 cursor-pointer">
+<input class="mt-1 text-charcoal focus:ring-charcoal" name="db_type" type="radio"/>
+<div>
+<span class="block text-sm font-bold text-charcoal">Confidential Database</span>
+<span class="block text-xs text-body">Managers &amp; Admins only</span>
+</div>
+</label>
+</div>
+</div>
+<button class="w-full bg-charcoal text-white py-3.5 rounded-full font-bold hover:shadow-lg transition-all active:scale-95">
+              Upload &amp; Ingest Document
+            </button>
+</div>
+</div>
+<!-- Documents List -->
+<div class="lg:col-span-7">
+<div class="border border-border rounded-2xl overflow-hidden">
+<table class="w-full text-left">
+<thead class="bg-surface text-[10px] uppercase tracking-widest font-bold text-body border-b border-border">
+<tr>
+<th class="px-6 py-4">Filename</th>
+<th class="px-6 py-4">Access</th>
+<th class="px-6 py-4">Date</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border text-sm">
+<tr class="hover:bg-surface/30">
+<td class="px-6 py-4">
+<div class="flex items-center">
+<i class="w-4 h-4 text-body mr-3" data-lucide="file-text"></i>
+<span class="font-medium text-charcoal">Employee_Handbook_2024.pdf</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Public</span>
+</td>
+<td class="px-6 py-4 text-body text-xs">Dec 15, 2024</td>
+</tr>
+<tr class="hover:bg-surface/30">
+<td class="px-6 py-4">
+<div class="flex items-center">
+<i class="w-4 h-4 text-body mr-3" data-lucide="lock"></i>
+<span class="font-medium text-charcoal">Payroll_Structure_Q4.xlsx</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-xs font-bold text-brand bg-orange-50 px-2 py-0.5 rounded">Confidential</span>
+</td>
+<td class="px-6 py-4 text-body text-xs">Jan 05, 2025</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Documents Tab -->
+<!-- BEGIN: Metrics Tab -->
+<section class="tab-content p-8 md:p-12 max-w-7xl mx-auto" id="metrics">
+<header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
+<div>
+<h1 class="text-3xl font-bold text-charcoal">Performance &amp; Usage</h1>
+<p class="text-body mt-2">Real-time LLMOps metrics and security monitoring.</p>
+</div>
+<div class="inline-flex bg-surface p-1 rounded-xl border border-border">
+<button class="px-4 py-2 text-xs font-bold bg-white text-charcoal rounded-lg shadow-sm">Last 7 Days</button>
+<button class="px-4 py-2 text-xs font-bold text-body hover:text-charcoal transition-colors">Last 30 Days</button>
+</div>
+</header>
+<!-- Metric Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+<div class="bg-surface border border-border p-6 rounded-2xl">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[10px] font-bold uppercase text-body tracking-wider">Total Queries</span>
+<i class="w-4 h-4 text-brand" data-lucide="message-circle"></i>
+</div>
+<h4 class="text-3xl font-extrabold text-charcoal">1,402</h4>
+<p class="text-[11px] font-bold text-green-600 mt-2">↑ 8.4% vs last week</p>
+</div>
+<div class="bg-surface border border-border p-6 rounded-2xl">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[10px] font-bold uppercase text-body tracking-wider">Tokens Used</span>
+<i class="w-4 h-4 text-brand" data-lucide="cpu"></i>
+</div>
+<h4 class="text-3xl font-extrabold text-charcoal">842K</h4>
+<p class="text-[11px] font-bold text-body mt-2">GPT-4o Model</p>
+</div>
+<div class="bg-surface border border-border p-6 rounded-2xl">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[10px] font-bold uppercase text-body tracking-wider">Security Blocks</span>
+<i class="w-4 h-4 text-brand" data-lucide="shield-alert"></i>
+</div>
+<h4 class="text-3xl font-extrabold text-charcoal">24</h4>
+<p class="text-[11px] font-bold text-red-500 mt-2">Lakera Guard active</p>
+</div>
+<div class="bg-surface border border-border p-6 rounded-2xl">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[10px] font-bold uppercase text-body tracking-wider">HITL Escalations</span>
+<i class="w-4 h-4 text-brand" data-lucide="user-check"></i>
+</div>
+<h4 class="text-3xl font-extrabold text-charcoal">5</h4>
+<p class="text-[11px] font-bold text-body mt-2">Avg SLA: 22m</p>
+</div>
+</div>
+<!-- Charts Row -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+<div class="p-8 border border-border rounded-3xl bg-white">
+<h4 class="text-sm font-bold text-charcoal mb-6 flex items-center">
+<i class="w-4 h-4 mr-2 text-brand" data-lucide="line-chart"></i>
+            Query Volume Over Time
+          </h4>
+<div class="h-64 flex items-center justify-center bg-surface/30 rounded-xl">
+<!-- Placeholder for actual Chart.js canvas -->
+<canvas id="queryChart"></canvas>
+</div>
+</div>
+<div class="p-8 border border-border rounded-3xl bg-white">
+<h4 class="text-sm font-bold text-charcoal mb-6 flex items-center">
+<i class="w-4 h-4 mr-2 text-brand" data-lucide="pie-chart"></i>
+            Response Confidence Breakdown
+          </h4>
+<div class="h-64 flex items-center justify-center">
+<canvas id="confidenceChart"></canvas>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Metrics Tab -->
+<!-- BEGIN: Email Settings Tab -->
+<section class="tab-content p-8 md:p-12 max-w-3xl mx-auto" id="email-settings">
+<header class="mb-10">
+<h1 class="text-3xl font-bold text-charcoal">Email Configuration</h1>
+<p class="text-body mt-2">Configure how your team receives invitations via Gmail.</p>
+</header>
+<div class="p-6 bg-green-50 border border-green-100 rounded-2xl flex items-start space-x-4 mb-10">
+<div class="bg-green-600 p-2 rounded-full mt-1">
+<i class="w-4 h-4 text-white" data-lucide="check"></i>
+</div>
+<div>
+<h4 class="text-sm font-bold text-green-800">System Ready</h4>
+<p class="text-xs text-green-700 mt-1 leading-relaxed">Invites are currently being sent from <strong>admin@acme.com</strong> using a secure Google App Password.</p>
+</div>
+</div>
+<form class="space-y-6">
+<div>
+<label class="block text-xs font-bold text-charcoal mb-2 uppercase tracking-tight">Gmail Address</label>
+<input class="w-full px-4 py-3 bg-white border border-border rounded-xl focus:ring-2 focus:ring-charcoal outline-none" type="email" value="admin@acme.com"/>
+</div>
+<div>
+<div class="flex justify-between items-center mb-2">
+<label class="block text-xs font-bold text-charcoal uppercase tracking-tight">App Password</label>
+<a class="text-[11px] font-bold text-brand hover:underline" href="#">How to generate?</a>
+</div>
+<input class="w-full px-4 py-3 bg-white border border-border rounded-xl focus:ring-2 focus:ring-charcoal outline-none" type="password" value="••••••••••••••••"/>
+<p class="text-[11px] text-body mt-2">The 16-character password from Google App Passwords — NOT your normal password.</p>
+</div>
+<div class="pt-4 border-t border-border flex flex-col md:flex-row gap-4">
+<button class="flex-1 bg-charcoal text-white py-3 rounded-full font-bold hover:shadow-lg transition-all" type="button">Save Changes</button>
+<button class="flex-1 bg-surface border border-border text-charcoal py-3 rounded-full font-bold hover:bg-border transition-all" type="button">Send Test Email</button>
+</div>
+</form>
+</section>
+<!-- END: Email Settings Tab -->
+</main>
+<!-- END: MainContent -->
+<script data-purpose="dashboard-logic">
+    // Tab switching logic
+    function switchTab(tabId, element) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      
+      // Show requested tab
+      document.getElementById(tabId).classList.add('active');
+      
+      // Update sidebar styling
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('sidebar-active');
+      });
+      element.classList.add('sidebar-active');
+    }
+
+    // Lucide Icon replacement
+    lucide.createIcons();
+
+    // Placeholder logout
+    function handleLogout() {
+      localStorage.removeItem("nova_token");
+      localStorage.removeItem("nova_role");
+      window.location.href = "login.html";
+    }
+
+    // Chart.js Initialization
+    window.onload = function() {
+      // Query Line Chart
+      const ctxQuery = document.getElementById('queryChart')?.getContext('2d');
+      if (ctxQuery) {
+        new Chart(ctxQuery, {
+          type: 'line',
+          data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+              label: 'Queries',
+              data: [120, 190, 150, 220, 310, 80, 60],
+              borderColor: '#FF5925',
+              backgroundColor: 'rgba(255, 89, 37, 0.1)',
+              tension: 0.4,
+              fill: true,
+              pointRadius: 4,
+              pointBackgroundColor: '#FFF',
+              borderWidth: 3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, grid: { color: '#F3F4F6' } },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      }
+
+      // Confidence Pie Chart
+      const ctxConf = document.getElementById('confidenceChart')?.getContext('2d');
+      if (ctxConf) {
+        new Chart(ctxConf, {
+          type: 'doughnut',
+          data: {
+            labels: ['High', 'Medium', 'Low'],
+            datasets: [{
+              data: [75, 18, 7],
+              backgroundColor: ['#16A34A', '#EAB308', '#DC2626'],
+              borderWidth: 0,
+              hoverOffset: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { padding: 20, font: { weight: 'bold', family: 'Inter' } }
+              }
+            },
+            cutout: '70%'
+          }
+        });
+      }
+    };
+  </script>
+</body></html>

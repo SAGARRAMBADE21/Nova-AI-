@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-orange: #FF5925;
+  --color-brand-orangeHover: #FF7A47;
+  --color-brand-hoverOrange: #FF7A47;
+  --color-brand-charcoal: #1A1A1A;
+  --color-brand-grayBody: #666666;
+  --color-brand-lightBg: #F5F5F5;
+  --color-brand-lightGray: #F5F5F5;
+  --color-brand-grayLight: #F5F5F5;
+  --color-brand-border: #E5E7EB;
+  --color-brand-borderGray: #E5E7EB;
+  --color-brand-grayBorder: #E5E7EB;
+  --color-brand-grayCaption: #9CA3AF;
+  --color-brand-placeholder: #9CA3AF;
+  --color-brand-success: #16A34A;
+  --color-brand-danger: #DC2626;
+  --color-brand-accentPeach: #FFB347;
+
+  --font-sans: "Inter", sans-serif;
+
+  --radius-card: 24px;
+  --radius-button: 999px;
+  --radius-pill: 999px;
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #E5E7EB;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #D1D5DB;
+  }
+}
+
+html, body {
+  height: 100%;
+}
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  color: var(--color-brand-grayBody);
+  background-color: #FFFFFF;
+}
