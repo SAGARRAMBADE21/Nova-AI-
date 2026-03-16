@@ -12,6 +12,7 @@ Improvements:
 import base64
 import logging
 import re
+from typing import Optional
 from .base import BasePlugin, PluginResult, with_retry, ActionSchema, ParamSpec
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,9 @@ class GmailPlugin(BasePlugin):
     # ── Helpers ───────────────────────────────────────────────────────────
 
     def _build_raw(self, to: str, subject: str, body: str,
-                   thread_id: str = None, cc: str = None, bcc: str = None) -> dict:
+                   thread_id: Optional[str] = None,
+                   cc: Optional[str] = None,
+                   bcc: Optional[str] = None) -> dict:
         from email.mime.text import MIMEText
         msg = MIMEText(body, "html" if "<" in body else "plain")
         msg["to"]      = to
@@ -150,8 +153,10 @@ class GmailPlugin(BasePlugin):
         if not self._valid_email(to):
             return self._fail("send_email", f"Invalid email address: '{to}'",
                               error_code="INVALID_PARAMS")
+        cc = str(params.get("cc") or "")
+        bcc = str(params.get("bcc") or "")
         msg    = self._build_raw(to, subject, params.get("body", ""),
-                                 cc=params.get("cc"), bcc=params.get("bcc"))
+                                 cc=cc or None, bcc=bcc or None)
         result = self.service.users().messages().send(userId="me", body=msg).execute()
         return self._ok("send_email", f"Email sent to {to}.",
                         data={"message_id": result["id"]})
@@ -221,8 +226,8 @@ class GmailPlugin(BasePlugin):
         if not self._valid_email(to):
             return self._fail("reply_email", f"Invalid email address: '{to}'",
                               error_code="INVALID_PARAMS")
-        msg    = self._build_raw(to, params.get("subject", "Re:"),
-                                 params.get("body", ""), thread_id=thread_id)
+        msg    = self._build_raw(to, str(params.get("subject", "Re:")),
+                                 str(params.get("body", "")), thread_id=thread_id)
         result = self.service.users().messages().send(userId="me", body=msg).execute()
         return self._ok("reply_email", f"Reply sent to {to}.",
                         data={"message_id": result["id"]})

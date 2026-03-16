@@ -87,7 +87,7 @@ class WebScraper:
 
         # 3. Extract
         soup    = BeautifulSoup(response.text, "html.parser")
-        title   = soup.title.string if soup.title else url
+        title   = soup.title.string if (soup.title and soup.title.string) else url
         # Remove script/style tags
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()

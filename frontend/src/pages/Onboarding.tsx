@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { onboard } from '@/lib/api';
 
 const Onboarding = () => {
   const [step, setStep] = useState(1);
@@ -7,6 +8,7 @@ const Onboarding = () => {
   const [joinCode, setJoinCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,13 +49,21 @@ const Onboarding = () => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) return;
     setIsSubmitting(true);
+    setErrorMsg('');
     
-    // Simulate API Call
-    setTimeout(() => {
-      setJoinCode(formData.companyName.substring(0, 4).toUpperCase() + 'XK7P12');
-      setIsSubmitting(false);
+    try {
+      const result = await onboard({
+        company_name:   formData.companyName,
+        admin_email:    formData.adminEmail,
+        admin_password: formData.password,
+      });
+      setJoinCode(result.join_code);
       setStep(2);
-    }, 1200);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to create workspace. Is the backend running?');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -142,6 +152,9 @@ const Onboarding = () => {
                   <svg className="h-5 w-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M14 5l7 7m0 0l-7 7m7-7H3" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
                 )}
               </button>
+              {errorMsg && (
+                <p className="text-sm font-semibold text-red-500 pt-2">{errorMsg}</p>
+              )}
             </form>
             <div className="mt-8 pt-8 border-t border-brand-border text-center">
               <button className="text-sm font-semibold text-brand-charcoal hover:underline" onClick={() => navigate('/login')}>Already have a workspace? Sign In →</button>

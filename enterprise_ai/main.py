@@ -357,8 +357,8 @@ class EnterpriseAIAssistant:
                 temperature = 0.1,
                 max_tokens  = 1500,
             )
-            llm_output  = llm_response.choices[0].message.content
-            token_count = llm_response.usage.total_tokens
+            llm_output  = llm_response.choices[0].message.content or ""
+            token_count = llm_response.usage.total_tokens if llm_response.usage else 0
         except Exception as e:
             logger.error(f"[Assistant] LLM error: {e}")
             self.metrics.record_error()

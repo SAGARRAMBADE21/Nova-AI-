@@ -168,7 +168,7 @@ class DataIngestionPipeline:
     def _parse_docx(self, path: Path) -> str:
         try:
             from docx import Document
-            doc = Document(path)
+            doc = Document(str(path))
             return "\n".join(p.text for p in doc.paragraphs if p.text)
         except ImportError:
             logger.warning("[Ingestion] python-docx not installed.")

@@ -21,7 +21,7 @@ def with_retry(max_attempts: int = 3, backoff: float = 1.0):
     def decorator(fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            last_exc = None
+            last_exc: Exception | None = None
             for attempt in range(1, max_attempts + 1):
                 try:
                     return fn(*args, **kwargs)
@@ -39,7 +39,9 @@ def with_retry(max_attempts: int = 3, backoff: float = 1.0):
                             f"failed: {e}. Retrying in {wait}s..."
                         )
                         time.sleep(wait)
-            raise last_exc
+            if last_exc is not None:
+                raise last_exc
+            raise RuntimeError("Retry wrapper exited without capturing an exception")
         return wrapper
     return decorator
 
@@ -168,7 +170,7 @@ class BasePlugin(ABC):
     # ── Result helpers ────────────────────────────────────────────────────
 
     def _ok(self, action: str, message: str,
-            data=None, url: str = None) -> PluginResult:
+            data=None, url: Optional[str] = None) -> PluginResult:
         logger.info(f"[{self.name}] ✓ {action}: {message}")
         return PluginResult(self.name, action, True, message, data, url)
 

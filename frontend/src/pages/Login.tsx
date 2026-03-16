@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { joinWorkspace } from '@/lib/api';
 
 const Login = () => {
   const [formData, setFormData] = useState({ join_code: '', email: '', password: '' });
@@ -18,23 +19,17 @@ const Login = () => {
     setErrorMsg('');
 
     try {
-      // Simulated API Call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      if (formData.join_code !== 'FAIL') {
-        localStorage.setItem("nova_token", "simToken123");
-        localStorage.setItem("nova_role", "admin");
-        localStorage.setItem("nova_company", "Acme Corp");
-        navigate('/dashboard');
-      } else {
-        throw new Error('Invalid credentials or join code - please try again.');
-      }
+      const result = await joinWorkspace({
+        join_code: formData.join_code.trim().toUpperCase(),
+        email:     formData.email.trim().toLowerCase(),
+        password:  formData.password,
+      });
+      localStorage.setItem('nova_token',   result.token);
+      localStorage.setItem('nova_role',    result.role);
+      localStorage.setItem('nova_company', result.company_name);
+      navigate('/dashboard');
     } catch (err) {
-      if (err instanceof Error) {
-        setErrorMsg(err.message);
-      } else {
-        setErrorMsg('Authentication failed');
-      }
+      setErrorMsg(err instanceof Error ? err.message : 'Login failed. Is the backend running?');
       setIsSubmitting(false);
     }
   };

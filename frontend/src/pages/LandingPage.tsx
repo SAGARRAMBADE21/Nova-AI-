@@ -1,33 +1,70 @@
 import { useState } from 'react';
+import * as Sortable from "@/components/ui/sortable";
 import { useNavigate } from 'react-router-dom';
+import { joinWorkspace } from '@/lib/api';
 
 const LandingPage = () => {
+  const [capabilities, setCapabilities] = useState([
+    {
+      id: "rbac",
+      title: "Role-Based Access Control",
+      desc: "4 roles: Employee, Team Lead, Manager, Admin. Every answer is scoped to what the user is permitted to read.",
+      icon: <svg className="w-4 h-4 text-[#FF5925]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
+    },
+    {
+      id: "trained",
+      title: "Trained on Your Documents",
+      desc: "Upload PDF, DOCX, XLSX, and more. Vectorized indexing ensures ARIA only answers from your company's data.",
+      icon: <svg className="w-4 h-4 text-[#FF5925]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
+    },
+    {
+      id: "google",
+      title: "Google Workspace Integrations",
+      desc: "Send emails via Gmail, create Calendar events, and update Sheets—all from one chat interface.",
+      icon: <svg className="w-4 h-4 text-[#FF5925]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
+    },
+    {
+      id: "lakera",
+      title: "3-Layer Lakera Guard",
+      desc: "Industry-standard security scans user inputs, retrieved docs, and AI outputs to prevent prompt injections.",
+      icon: <svg className="w-4 h-4 text-[#FF5925]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
+    },
+    {
+      id: "hitl",
+      title: "Human-in-the-Loop",
+      desc: "High-risk queries are paused and escalated automatically to Leads or Managers for a 30-minute SLA review.",
+      icon: <svg className="w-4 h-4 text-[#FF5925]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
+    },
+    {
+      id: "llmops",
+      title: "Admin LLMOps Metrics",
+      desc: "Track queries, token usage, security blocks, and response latency through a comprehensive dashboard.",
+      icon: <svg className="w-4 h-4 text-[#FF5925]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
+    }
+  ]);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [loginError, setLoginError] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [loginForm, setLoginForm] = useState({ join_code: '', email: '', password: '' });
   const navigate = useNavigate();
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    setLoginError(false);
+    setLoginError('');
 
     try {
-      // Simulated API Call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const joinCode = (document.getElementById('joinCode') as HTMLInputElement).value;
-      
-      if (joinCode.toUpperCase() === 'FAIL') {
-        throw new Error('Invalid credentials');
-      }
-
-      localStorage.setItem('nova_token', 'simulated_jwt_token');
-      localStorage.setItem('nova_role', 'admin');
-      localStorage.setItem('nova_company', 'Acme Corp');
-      
+      const result = await joinWorkspace({
+        join_code: loginForm.join_code.trim().toUpperCase(),
+        email:     loginForm.email.trim().toLowerCase(),
+        password:  loginForm.password,
+      });
+      localStorage.setItem('nova_token',   result.token);
+      localStorage.setItem('nova_role',    result.role);
+      localStorage.setItem('nova_company', result.company_name);
       navigate('/dashboard');
-    } catch {
-      setLoginError(true);
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : 'Login failed.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -134,16 +171,37 @@ const LandingPage = () => {
                 <form className="space-y-4" onSubmit={handleLoginSubmit}>
                   <div>
                     <label className="block text-[13px] font-semibold text-brand-charcoal mb-1">Company Join Code</label>
-                    <input className="w-full rounded-xl border-brand-border text-sm focus:ring-brand-charcoal focus:border-brand-charcoal uppercase" id="joinCode" placeholder="e.g. ACMEXK7P12" required type="text"/>
+                    <input
+                      className="w-full rounded-xl border-brand-border text-sm focus:ring-brand-charcoal focus:border-brand-charcoal uppercase"
+                      placeholder="e.g. ACMEXK7P12"
+                      required
+                      type="text"
+                      value={loginForm.join_code}
+                      onChange={e => setLoginForm(f => ({ ...f, join_code: e.target.value }))}
+                    />
                   </div>
                   <div>
                     <label className="block text-[13px] font-semibold text-brand-charcoal mb-1">Email Address</label>
-                    <input className="w-full rounded-xl border-brand-border text-sm focus:ring-brand-charcoal focus:border-brand-charcoal" placeholder="your@company.com" required type="email"/>
+                    <input
+                      className="w-full rounded-xl border-brand-border text-sm focus:ring-brand-charcoal focus:border-brand-charcoal"
+                      placeholder="your@company.com"
+                      required
+                      type="email"
+                      value={loginForm.email}
+                      onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))}
+                    />
                   </div>
                   <div>
                     <label className="block text-[13px] font-semibold text-brand-charcoal mb-1">Password</label>
                     <div className="relative">
-                      <input className="w-full rounded-xl border-brand-border text-sm focus:ring-brand-charcoal focus:border-brand-charcoal" id="loginPass" placeholder="Password" required type="password"/>
+                      <input
+                        className="w-full rounded-xl border-brand-border text-sm focus:ring-brand-charcoal focus:border-brand-charcoal"
+                        placeholder="Password"
+                        required
+                        type="password"
+                        value={loginForm.password}
+                        onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
+                      />
                     </div>
                   </div>
                   <div className="flex items-center">
@@ -166,7 +224,7 @@ const LandingPage = () => {
                     ) : 'Sign In'}
                   </button>
                   {loginError && (
-                    <div className="text-red-600 text-[11px] font-medium mt-2">Invalid credentials. Please try again.</div>
+                    <div className="text-red-600 text-[11px] font-medium mt-2">{loginError}</div>
                   )}
                 </form>
                 <div className="mt-6 pt-4 border-t border-brand-border text-[12px] space-y-2">
@@ -237,55 +295,30 @@ const LandingPage = () => {
             <h2 className="text-4xl font-bold text-brand-charcoal mt-2 mb-4">Everything your team needs</h2>
             <p className="text-lg text-brand-grayBody">One AI assistant that works across every role in your company.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-brand-lightBg p-8 rounded-card border border-brand-border card-hover">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-6 shadow-sm">
-                <svg className="w-6 h-6 text-brand-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
-              </div>
-              <h3 className="text-xl font-bold text-brand-charcoal mb-4">Role-Based Access Control</h3>
-              <p className="text-brand-grayBody leading-relaxed">4 roles: Employee, Team Lead, Manager, Admin. Every answer is scoped to what the user is permitted to read.</p>
-            </div>
+          <Sortable.Root
+            value={capabilities}
+            onValueChange={setCapabilities}
+            getItemValue={(item: { id: string }) => item.id}
+            orientation="mixed"
+          >
+            <Sortable.Content className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {capabilities.map((cap) => (
+                <Sortable.Item key={cap.id} value={cap.id} asChild asHandle>
+                  <div className="bg-[#F8F9FA] p-8 rounded-2xl border border-gray-100 hover:shadow-sm transition-all group bg-white hover:border-[#FF5925] cursor-grab active:cursor-grabbing hover:-translate-y-1 relative z-10 hover:z-20">
+                    <div className="w-10 h-10 bg-white rounded-lg border border-gray-100 flex items-center justify-center mb-6 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)] group-hover:scale-105 transition-transform pointer-events-none">
+                      {cap.icon}
+                    </div>
+                    <h3 className="text-base font-semibold text-[#1A1A1A] mb-3 pointer-events-none">{cap.title}</h3>
+                    <p className="text-[14px] text-[#666666] leading-relaxed pointer-events-none">{cap.desc}</p>
+                  </div>
+                </Sortable.Item>
+              ))}
+            </Sortable.Content>
             
-            <div className="bg-brand-lightBg p-8 rounded-card border border-brand-border card-hover">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-6 shadow-sm">
-                <svg className="w-6 h-6 text-brand-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
-              </div>
-              <h3 className="text-xl font-bold text-brand-charcoal mb-4">Trained on Your Documents</h3>
-              <p className="text-brand-grayBody leading-relaxed">Upload PDF, DOCX, XLSX, and more. Vectorized indexing ensures ARIA only answers from your company's data.</p>
-            </div>
-            
-            <div className="bg-brand-lightBg p-8 rounded-card border border-brand-border card-hover">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-6 shadow-sm">
-                <svg className="w-6 h-6 text-brand-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
-              </div>
-              <h3 className="text-xl font-bold text-brand-charcoal mb-4">Google Workspace Integrations</h3>
-              <p className="text-brand-grayBody leading-relaxed">Send emails via Gmail, create Calendar events, and update Sheets—all from one chat interface.</p>
-            </div>
-            
-            <div className="bg-brand-lightBg p-8 rounded-card border border-brand-border card-hover">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-6 shadow-sm">
-                <svg className="w-6 h-6 text-brand-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
-              </div>
-              <h3 className="text-xl font-bold text-brand-charcoal mb-4">3-Layer Lakera Guard</h3>
-              <p className="text-brand-grayBody leading-relaxed">Industry-standard security scans user inputs, retrieved docs, and AI outputs to prevent prompt injections.</p>
-            </div>
-            
-            <div className="bg-brand-lightBg p-8 rounded-card border border-brand-border card-hover">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-6 shadow-sm">
-                <svg className="w-6 h-6 text-brand-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
-              </div>
-              <h3 className="text-xl font-bold text-brand-charcoal mb-4">Human-in-the-Loop</h3>
-              <p className="text-brand-grayBody leading-relaxed">High-risk queries are paused and escalated automatically to Leads or Managers for a 30-minute SLA review.</p>
-            </div>
-            
-            <div className="bg-brand-lightBg p-8 rounded-card border border-brand-border card-hover">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-6 shadow-sm">
-                <svg className="w-6 h-6 text-brand-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
-              </div>
-              <h3 className="text-xl font-bold text-brand-charcoal mb-4">Admin LLMOps Metrics</h3>
-              <p className="text-brand-grayBody leading-relaxed">Track queries, token usage, security blocks, and response latency through a comprehensive dashboard.</p>
-            </div>
-          </div>
+            <Sortable.Overlay>
+              <div className="bg-[#F8F9FA] p-8 rounded-2xl border-2 border-[#FF5925] shadow-xl w-full h-full opacity-80 scale-105 cursor-grabbing mix-blend-multiply"></div>
+            </Sortable.Overlay>
+          </Sortable.Root>
         </div>
       </section>
 

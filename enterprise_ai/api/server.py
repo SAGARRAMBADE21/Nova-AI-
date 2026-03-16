@@ -17,6 +17,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import uvicorn
@@ -31,6 +32,15 @@ from utils.email_sender import send_invite_email
 
 app       = FastAPI(title="Nova AI — Enterprise Assistant", version="2.0.0")
 assistant = EnterpriseAIAssistant()
+
+# ── CORS — allow Vite dev server ──────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ── Unified auth dependency ───────────────────────────────────────────────
 # Accepts EITHER:

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { MessageSquare, Cpu, AlertTriangle, Users, LineChart, PieChart } from 'lucide-react';
-import Chart from 'chart.js/auto';
+import type Chart from 'chart.js/auto';
 
 const Metrics = () => {
   const queryChartRef = useRef<HTMLCanvasElement>(null);
@@ -9,63 +9,75 @@ const Metrics = () => {
   useEffect(() => {
     let queryChartInstance: Chart | null = null;
     let confChartInstance: Chart | null = null;
+    let disposed = false;
 
-    if (queryChartRef.current) {
-      queryChartInstance = new Chart(queryChartRef.current, {
-        type: 'line',
-        data: {
-          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-          datasets: [{
-            label: 'Queries',
-            data: [120, 190, 150, 220, 310, 80, 60],
-            borderColor: '#FF5925',
-            backgroundColor: 'rgba(255, 89, 37, 0.1)',
-            tension: 0.4,
-            fill: true,
-            pointRadius: 4,
-            pointBackgroundColor: '#FFF',
-            borderWidth: 3
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: { beginAtZero: true, grid: { color: '#F3F4F6' } },
-            x: { grid: { display: false } }
-          }
-        }
-      });
-    }
+    const initCharts = async () => {
+      const { default: ChartCtor } = await import('chart.js/auto');
+      if (disposed) {
+        return;
+      }
 
-    if (confidenceChartRef.current) {
-      confChartInstance = new Chart(confidenceChartRef.current, {
-        type: 'doughnut',
-        data: {
-          labels: ['High', 'Medium', 'Low'],
-          datasets: [{
-            data: [75, 18, 7],
-            backgroundColor: ['#16A34A', '#EAB308', '#DC2626'],
-            borderWidth: 0,
-            hoverOffset: 4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: { padding: 20, font: { weight: 'bold', family: 'Inter' } }
-            }
+      if (queryChartRef.current) {
+        queryChartInstance = new ChartCtor(queryChartRef.current, {
+          type: 'line',
+          data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+              label: 'Queries',
+              data: [120, 190, 150, 220, 310, 80, 60],
+              borderColor: '#FF5925',
+              backgroundColor: 'rgba(255, 89, 37, 0.1)',
+              tension: 0.4,
+              fill: true,
+              pointRadius: 4,
+              pointBackgroundColor: '#FFF',
+              borderWidth: 3
+            }]
           },
-          cutout: '70%'
-        }
-      });
-    }
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, grid: { color: '#F3F4F6' } },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      }
+
+      if (confidenceChartRef.current) {
+        confChartInstance = new ChartCtor(confidenceChartRef.current, {
+          type: 'doughnut',
+          data: {
+            labels: ['High', 'Medium', 'Low'],
+            datasets: [{
+              data: [75, 18, 7],
+              backgroundColor: ['#16A34A', '#EAB308', '#DC2626'],
+              borderWidth: 0,
+              hoverOffset: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { padding: 20, font: { weight: 'bold', family: 'Inter' } }
+              }
+            }
+            ,
+            cutout: '70%'
+          }
+        });
+      }
+    };
+
+    void initCharts();
 
     return () => {
+      disposed = true;
       if (queryChartInstance) queryChartInstance.destroy();
       if (confChartInstance) confChartInstance.destroy();
     };

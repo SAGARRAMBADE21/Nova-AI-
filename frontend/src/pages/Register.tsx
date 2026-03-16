@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { register as registerUser } from '@/lib/api';
 
 const Register = () => {
   const [formData, setFormData] = useState({ join_code: '', email: '', password: '', confirm_password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [registeredRole, setRegisteredRole] = useState('Employee');
+  const [errorMsg, setErrorMsg] = useState('');
   const [countdown, setCountdown] = useState(3);
   const navigate = useNavigate();
 
@@ -47,21 +50,37 @@ const Register = () => {
     e.preventDefault();
     if (formData.password !== formData.confirm_password) return;
     setIsSubmitting(true);
+    setErrorMsg('');
     
-    // Simulate API Call
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const result = await registerUser({
+        join_code: formData.join_code.trim().toUpperCase(),
+        email:     formData.email.trim().toLowerCase(),
+        password:  formData.password,
+      });
+      setRegisteredRole(result.role);
       setSuccess(true);
-    }, 1200);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Registration failed. Is the backend running?');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
-    if (success && countdown > 0) {
-      setTimeout(() => setCountdown(countdown - 1), 1000);
-    } else if (success && countdown === 0) {
-      navigate('/login');
-    }
-  }, [success, countdown, navigate]);
+    if (!success) return;
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          navigate('/login');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [success, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-x-hidden bg-white text-brand-grayBody font-sans">
@@ -135,6 +154,10 @@ const Register = () => {
                   )}
                 </button>
               </div>
+
+              {errorMsg && (
+                <p className="text-sm font-semibold text-red-500 pt-2">{errorMsg}</p>
+              )}
             </form>
           </>
         ) : (
@@ -143,7 +166,7 @@ const Register = () => {
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3"></path></svg>
             </div>
             <h2 className="text-2xl font-bold text-brand-charcoal mb-2">Account Created Successfully</h2>
-            <p className="text-brand-grayBody mb-6">You are joining as: <span className="font-semibold text-brand-charcoal bg-gray-100 px-3 py-1 rounded-full text-sm">Employee</span></p>
+            <p className="text-brand-grayBody mb-6">You are joining as: <span className="font-semibold text-brand-charcoal bg-gray-100 px-3 py-1 rounded-full text-sm capitalize">{registeredRole}</span></p>
             <div className="w-full bg-gray-50 border border-brand-border rounded-xl p-6 mb-8">
               <p className="text-sm text-brand-grayBody mb-1">Auto-redirect countdown:</p>
               <p className="text-2xl font-bold text-brand-orange">Taking you to login in {countdown}...</p>

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, LogOut, Settings, X } from 'lucide-react';
+import { sendChat } from '@/lib/api';
 
 const Chat = () => {
-  const [messages, setMessages] = useState<{ id: string, type: 'user' | 'assistant', text: string, time: string, isTyping?: boolean }[]>([]);
+  const [messages, setMessages] = useState<{ id: string, type: 'user' | 'assistant', text: string, time: string, isTyping?: boolean, sources?: string[] }[]>([]);
   const [input, setInput] = useState('');
   const [showConnectors, setShowConnectors] = useState(true);
+  const [isConfidential, setIsConfidential] = useState(false);
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -14,24 +16,34 @@ const Chat = () => {
     navigate('/login');
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
-    const newMsg = { id: Date.now().toString(), type: 'user' as const, text: input, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
-    setMessages(prev => [...prev, newMsg]);
+    const userMsg = { id: Date.now().toString(), type: 'user' as const, text: input, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
+    setMessages(prev => [...prev, userMsg]);
+    const prompt = input;
     setInput('');
     
-    // Simulate typing
+    // Show typing indicator
     const typingId = (Date.now() + 1).toString();
     setMessages(prev => [...prev, { id: typingId, type: 'assistant', text: '', time: 'Now', isTyping: true }]);
     
-    setTimeout(() => {
+    try {
+      const result = await sendChat({ prompt });
       setMessages(prev => prev.map(m => m.id === typingId ? { 
         id: typingId, 
-        type: 'assistant', 
-        text: 'This is a simulated response based on your exact HTML template design requirements without hallucinations.',
-        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+        type: 'assistant' as const, 
+        text: result.response,
+        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       } : m));
-    }, 1500);
+    } catch (err) {
+      const errText = err instanceof Error ? err.message : 'Failed to get response. Is the backend running?';
+      setMessages(prev => prev.map(m => m.id === typingId ? { 
+        id: typingId, 
+        type: 'assistant' as const, 
+        text: `⚠️ ${errText}`,
+        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+      } : m));
+    }
   };
 
   return (
@@ -130,22 +142,30 @@ const Chat = () => {
       <main className="flex-1 flex flex-col relative h-full bg-white overflow-hidden">
         <header className="h-16 border-b border-brand-border px-8 flex items-center justify-between bg-white/80 backdrop-blur-md z-10 shrink-0">
           <div className="flex flex-col">
-            <h1 className="text-sm font-bold text-brand-charcoal uppercase tracking-wider">ARIA — Enterprise AI Assistant</h1>
+            <h1 className="text-sm font-bold text-brand-charcoal uppercase tracking-wider">AI ASSISTANT</h1>
             <p className="text-[11px] text-gray-400">Acme Corporation Workspace</p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="px-3 py-1 bg-brand-lightGray text-brand-charcoal text-xs font-semibold rounded-full border border-brand-border">
-              Public + Confidential Access
-            </span>
+            <div className="flex items-center gap-2 bg-brand-lightGray p-1 rounded-full border border-brand-border">
+              <button 
+                onClick={() => setIsConfidential(false)}
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-300 ${!isConfidential ? 'bg-white shadow-sm text-brand-charcoal' : 'text-gray-400 hover:text-brand-grayBody'}`}
+              >
+                Public
+              </button>
+              <button 
+                onClick={() => setIsConfidential(true)}
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-300 ${isConfidential ? 'bg-white shadow-sm text-brand-charcoal' : 'text-gray-400 hover:text-brand-grayBody'}`}
+              >
+                Confidential
+              </button>
+            </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-8 space-y-8 pb-40 custom-scrollbar">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto py-20">
-              <div className="w-16 h-16 bg-brand-lightGray rounded-2xl flex items-center justify-center mb-6 border border-brand-border">
-                <svg fill="none" height="32" stroke="#FF5925" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="32" xmlns="http://www.w3.org/2000/svg"><path d="m3 21 1.9-1.9a8.5 8.5 0 1 1 3.8 3.8z"></path></svg>
-              </div>
               <h2 className="text-4xl font-extrabold text-brand-charcoal tracking-tight mb-4">What can I help with today?</h2>
               <p className="text-lg text-brand-grayBody">Ask anything about your company's documents, policies, and data.</p>
             </div>
