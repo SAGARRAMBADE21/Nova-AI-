@@ -102,7 +102,6 @@ const LandingPage = () => {
             <a className="text-sm font-medium text-brand-grayBody hover:text-brand-charcoal transition-colors" href="#features">Features</a>
             <a className="text-sm font-medium text-brand-grayBody hover:text-brand-charcoal transition-colors" href="#how-it-works">How It Works</a>
             <a className="text-sm font-medium text-brand-grayBody hover:text-brand-charcoal transition-colors" href="#security">Security</a>
-            <a className="text-sm font-medium text-brand-grayBody hover:text-brand-charcoal transition-colors" href="#pricing">Pricing</a>
           </div>
 
           {/* Action Buttons */}
@@ -183,62 +182,52 @@ const LandingPage = () => {
       </nav>
 
       {/* BEGIN: Hero Section */}
-      <section className="relative pt-32 pb-20 overflow-hidden" id="hero">
-        <div className="ribbon-top-right"></div>
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className="inline-block px-4 py-1.5 mb-6 bg-orange-50 text-brand-orange rounded-full text-xs font-bold uppercase tracking-wider border border-orange-100">
-            Powered by GPT-4 + RAG
-          </div>
-          <h1 className="hero-heading mb-6">
-            Your Company's <br/>
-            <span className="text-brand-orange">Private AI Assistant</span>
-          </h1>
-          <p className="text-lg text-brand-grayBody mb-10 max-w-2xl mx-auto leading-relaxed">
-            QueryMind gives your entire team a secure, private AI assistant trained on your company's own documents and data. No hallucinations. No data leaks. Role-aware answers for every level of your organization.
-          </p>
-          <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <button className="bg-brand-charcoal text-white px-8 py-4 rounded-button font-bold hover:bg-black transition-all w-full sm:w-auto" onClick={() => navigate('/onboard')}>
-              Create Your Workspace — Free
-            </button>
-            <a className="bg-brand-lightBg text-brand-charcoal px-8 py-4 rounded-button font-bold hover:bg-brand-border transition-all w-full sm:w-auto" href="#how-it-works">
-              See How It Works
-            </a>
-          </div>
-          <div className="mt-8 text-sm text-gray-400 flex flex-wrap justify-center items-center gap-4">
-            <span>No credit card required</span>
-            <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-            <span>Set up in 2 minutes</span>
-            <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-            <span>Your data stays private</span>
-          </div>
-
-          <div className="mt-16 relative">
-            <div className="browser-mockup bg-white rounded-2xl p-2 max-w-5xl mx-auto overflow-hidden">
-              <div className="bg-brand-lightBg h-8 flex items-center px-4 space-x-2 rounded-t-xl mb-2">
-                <div className="w-2.5 h-2.5 bg-red-400 rounded-full"></div>
-                <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full"></div>
-                <div className="w-2.5 h-2.5 bg-green-400 rounded-full"></div>
-              </div>
-              <img alt="QueryMind UI Preview" className="w-full rounded-b-xl border-t border-brand-border" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2l0utw7J7PBbJdQY6MhRPvbgWGP9KYKJy1nN5b-s4HW76KyUcXv4hpTNakL094yN5ZcmxZHDre1xxEU6Mwn1mTI6ZA6ag59w57b363hpbxu5laOaYCMNCS-7fft1V16IISsTXu04vqYyP4P7f4wm3jwFatHA8gj342jQeQBECJovv8Ar7l87eb1z391nrgiOIVulwOya2KKcSkStig4AheZTTdaO_M6Slh-72Sdd7yz5Yr372wvpytl-QZx7DfHaGX5qbr9TMz_k"/>
+      <section className="relative pt-32 pb-20 overflow-hidden bg-white" id="hero">
+        <div className="max-w-7xl mx-auto px-6 relative z-10 flex flex-col justify-center min-h-[60vh]">
+          <div className="max-w-3xl">
+            {/* Gitbook-style pill */}
+            <div className="inline-flex items-center space-x-2 px-3 py-1.5 mb-8 bg-gray-50 border border-gray-200 rounded-full text-sm font-medium text-brand-charcoal shadow-sm">
+              <span className="bg-[#FF5925] text-white px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase">New</span>
+              <span>Introducing: QueryMind Agent</span>
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </div>
-            <div className="ribbon-decoration absolute -bottom-20 -left-20 w-80 h-80 z-[-1]"></div>
+            
+            {/* Massive Heading */}
+            <h1 className="text-[56px] md:text-[72px] font-medium text-[#1A1A1A] leading-[1.05] tracking-tight mb-6">
+              The AI-native<br />
+              documentation platform
+            </h1>
+            
+            {/* Subheading */}
+            <p className="text-[20px] text-[#555555] mb-10 leading-relaxed font-normal max-w-2xl">
+              Transform your documentation into a connected knowledge system —<br />
+              one that learns, optimizes, and improves itself intelligently
+            </p>
+            
+            {/* Buttons */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+              <button 
+                className="bg-[#1A1A1A] text-white px-6 py-3.5 rounded-full font-medium hover:bg-black transition-all flex items-center justify-between group min-w-[160px]"
+                onClick={() => navigate('/onboard')}
+              >
+                Start for free
+                <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button className="bg-[#F3F4F6] text-[#1A1A1A] px-6 py-3.5 rounded-full font-medium hover:bg-[#E5E7EB] transition-all">
+                Talk to us
+              </button>
+            </div>
           </div>
+        </div>
+
+        {/* Abstract Corner Graphic */}
+        <div className="absolute -bottom-40 -right-20 w-[800px] h-[800px] z-0 pointer-events-none opacity-20 hidden lg:block">
+          <div className="w-full h-full rounded-full border-[60px] border-[#FF5925] absolute blur-3xl"></div>
+          <div className="w-full h-full rounded-full border-[30px] border-[#FF8C00] absolute blur-2xl top-10 right-10"></div>
         </div>
       </section>
 
-      {/* BEGIN: Social Proof Bar */}
-      <section className="py-12 border-y border-brand-border bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-400 mb-8">Trusted by enterprise teams</p>
-          <div className="flex flex-wrap justify-center items-center gap-12 opacity-40 grayscale">
-            <div className="h-8 w-32 bg-gray-300 rounded"></div>
-            <div className="h-8 w-32 bg-gray-300 rounded"></div>
-            <div className="h-8 w-32 bg-gray-300 rounded"></div>
-            <div className="h-8 w-32 bg-gray-300 rounded"></div>
-            <div className="h-8 w-32 bg-gray-300 rounded"></div>
-          </div>
-        </div>
-      </section>
+
 
       {/* BEGIN: Features Grid */}
       <section className="py-24 bg-white" id="features">
@@ -388,65 +377,6 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* BEGIN: Pricing Grid */}
-      <section className="py-24 bg-brand-lightBg" id="pricing">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <span className="section-label">Pricing</span>
-            <h2 className="text-4xl font-bold text-brand-charcoal mt-2 mb-4">Simple, transparent pricing</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Starter */}
-            <div className="bg-white p-10 rounded-card border border-brand-border flex flex-col">
-              <div className="mb-8">
-                <span className="text-xs font-bold uppercase tracking-widest text-brand-orange">Starter</span>
-                <div className="text-4xl font-bold text-brand-charcoal mt-4 mb-2">Free</div>
-                <p className="text-sm text-brand-grayBody italic">For small teams getting started with AI</p>
-              </div>
-              <ul className="space-y-4 mb-10 flex-grow">
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Up to 10 users</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>100 documents</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Public knowledge base</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Google integrations</li>
-              </ul>
-              <button className="block text-center py-3 rounded-button border border-brand-charcoal font-bold text-brand-charcoal hover:bg-brand-charcoal hover:text-white transition-all w-full" onClick={() => navigate('/onboard')}>Get Started Free</button>
-            </div>
-            {/* Pro */}
-            <div className="bg-white p-10 rounded-card border-2 border-brand-orange flex flex-col relative scale-105 shadow-xl">
-              <div className="absolute top-0 right-10 -translate-y-1/2 bg-brand-orange text-white text-[10px] font-extrabold uppercase px-4 py-1 rounded-full tracking-widest">Most Popular</div>
-              <div className="mb-8">
-                <span className="text-xs font-bold uppercase tracking-widest text-brand-orange">Pro</span>
-                <div className="text-4xl font-bold text-brand-charcoal mt-4 mb-2">$49<span className="text-sm font-normal text-brand-grayBody">/mo</span></div>
-                <p className="text-sm text-brand-grayBody italic">For growing companies</p>
-              </div>
-              <ul className="space-y-4 mb-10 flex-grow">
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Up to 100 users</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Unlimited documents</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Confidential database</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>HITL workflows</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Priority support</li>
-              </ul>
-              <button className="block text-center py-4 rounded-button bg-brand-charcoal text-white font-bold hover:bg-black transition-all w-full" onClick={() => navigate('/onboard')}>Start Pro Trial</button>
-            </div>
-            {/* Enterprise */}
-            <div className="bg-white p-10 rounded-card border border-brand-border flex flex-col">
-              <div className="mb-8">
-                <span className="text-xs font-bold uppercase tracking-widest text-brand-orange">Enterprise</span>
-                <div className="text-4xl font-bold text-brand-charcoal mt-4 mb-2">Custom</div>
-                <p className="text-sm text-brand-grayBody italic">For large organisations</p>
-              </div>
-              <ul className="space-y-4 mb-10 flex-grow">
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Unlimited users</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>Custom data retention</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>SSO &amp; advanced security</li>
-                <li className="text-sm flex items-center text-brand-charcoal"><svg className="w-4 h-4 mr-3 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd"></path></svg>On-premise option</li>
-              </ul>
-              <button className="block text-center py-3 rounded-button border border-brand-charcoal font-bold text-brand-charcoal hover:bg-brand-charcoal hover:text-white transition-all w-full">Contact Sales</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* BEGIN: Final CTA Banner */}
       <section className="py-24 bg-brand-charcoal text-white relative overflow-hidden">
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
@@ -471,7 +401,6 @@ const LandingPage = () => {
               <li><a className="text-brand-grayBody hover:text-brand-charcoal transition-colors" href="#features">Features</a></li>
               <li><a className="text-brand-grayBody hover:text-brand-charcoal transition-colors" href="#how-it-works">How It Works</a></li>
               <li><a className="text-brand-grayBody hover:text-brand-charcoal transition-colors" href="#security">Security</a></li>
-              <li><a className="text-brand-grayBody hover:text-brand-charcoal transition-colors" href="#pricing">Pricing</a></li>
             </ul>
           </div>
           <div>
