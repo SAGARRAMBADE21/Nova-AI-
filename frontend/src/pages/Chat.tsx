@@ -64,6 +64,47 @@ const confidenceColor = (c?: string) => {
   return 'bg-gray-100 text-gray-500';
 };
 
+// Lightweight markdown renderer — handles bold, italic, inline code, headers, bullets
+const renderMarkdown = (text: string) => {
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
+    // Headers
+    if (line.startsWith('### ')) return <h3 key={i} className="font-bold text-sm text-brand-charcoal mt-2 mb-0.5">{line.slice(4)}</h3>;
+    if (line.startsWith('## '))  return <h2 key={i} className="font-bold text-base text-brand-charcoal mt-3 mb-1">{line.slice(3)}</h2>;
+    if (line.startsWith('# '))   return <h1 key={i} className="font-bold text-lg text-brand-charcoal mt-3 mb-1">{line.slice(2)}</h1>;
+    // Bullet points
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      return <li key={i} className="ml-4 list-disc text-brand-charcoal text-sm leading-relaxed">{inlineMarkdown(line.slice(2))}</li>;
+    }
+    if (/^\d+\.\s/.test(line)) {
+      return <li key={i} className="ml-4 list-decimal text-brand-charcoal text-sm leading-relaxed">{inlineMarkdown(line.replace(/^\d+\.\s/, ''))}</li>;
+    }
+    // Horizontal rule
+    if (line.startsWith('---')) return <hr key={i} className="border-brand-border my-2" />;
+    // Empty line
+    if (line.trim() === '') return <div key={i} className="h-1" />;
+    // Normal paragraph
+    return <p key={i} className="text-brand-charcoal text-sm leading-relaxed">{inlineMarkdown(line)}</p>;
+  });
+};
+
+const inlineMarkdown = (text: string): React.ReactNode => {
+  // Split on bold (**text**), italic (*text*), inline code (`code`)
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-bold text-brand-charcoal">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={i} className="italic">{part.slice(1, -1)}</em>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={i} className="bg-gray-100 text-brand-orange px-1 py-0.5 rounded text-xs font-mono">{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
+};
+
 // ── Component ────────────────────────────────────────────────────────────
 
 const Chat = () => {
@@ -394,7 +435,7 @@ const Chat = () => {
                       <>
                         <div className="space-y-1.5">
                           <span className="text-[10px] font-bold text-brand-orange uppercase tracking-wider">Answer</span>
-                          <div className="text-brand-charcoal leading-relaxed whitespace-pre-wrap text-sm">{msg.text}</div>
+                          <div className="text-brand-charcoal leading-relaxed text-sm space-y-0.5">{renderMarkdown(msg.text)}</div>
                         </div>
                         {msg.sources && msg.sources.length > 0 && (
                           <div className="space-y-1.5">
