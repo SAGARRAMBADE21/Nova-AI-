@@ -94,12 +94,14 @@ export function register(data: RegisterPayload) {
 export interface ChatPayload {
   prompt: string;
   session_id?: string;
+  history?: { role: string; content: string }[];
 }
 export interface ChatResponse {
   response: string;
   session_id?: string;
   tenant_id: string;
   role: string;
+  sources?: string[];
 }
 
 export function sendChat(data: ChatPayload) {
@@ -113,7 +115,7 @@ export interface InviteUserPayload {
   role: string;
 }
 export function inviteUser(data: InviteUserPayload) {
-  return request<{ message: string; invite_email: string }>('/invite-user', { method: 'POST', body: data });
+  return request<{ message: string; invite_email: string; email?: string; role?: string }>('/invite-user', { method: 'POST', body: data });
 }
 
 export function listUsers() {
@@ -132,6 +134,10 @@ export interface EmailConfigPayload {
 }
 export function setEmailConfig(data: EmailConfigPayload) {
   return request<{ message: string; sender: string }>('/email-config', { method: 'POST', body: data });
+}
+
+export function testEmail() {
+  return request<{ status: string; message: string }>('/test-email', { method: 'POST' });
 }
 
 // ── Documents ─────────────────────────────────────────────────────────────

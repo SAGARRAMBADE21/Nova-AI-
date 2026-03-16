@@ -12,6 +12,7 @@ const Users = lazy(() => import('./pages/Users'));
 const Documents = lazy(() => import('./pages/Documents'));
 const EmailSettings = lazy(() => import('./pages/EmailSettings'));
 const Metrics = lazy(() => import('./pages/Metrics'));
+const Tools = lazy(() => import('./pages/Tools'));
 
 function RouteFallback() {
   return (
@@ -40,6 +41,7 @@ function App() {
             <Route path="documents" element={<Documents />} />
             <Route path="email-settings" element={<EmailSettings />} />
             <Route path="metrics" element={<Metrics />} />
+            <Route path="tools" element={<Tools />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

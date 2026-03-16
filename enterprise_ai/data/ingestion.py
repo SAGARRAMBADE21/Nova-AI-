@@ -44,17 +44,22 @@ class DataIngestionPipeline:
                tenant_id: str,
                category: str    = "general",
                uploaded_by: str = "admin",
-               db_type: str     = "public") -> dict:
+               db_type: str     = "public",
+               original_filename: str = "") -> dict:
         """
         Full ingestion pipeline for a single file.
 
         tenant_id         — company workspace scope (required)
         db_type='public'  → visible to all roles
         db_type='private' → visible to manager, team_lead, admin only
+        original_filename — display name to use as source (overrides temp path)
         Returns ingestion report dict.
         """
         path      = Path(file_path)
+        # Use original filename if provided (avoids showing tmp paths like tmpewtij2bc.pdf)
+        source_name = original_filename or path.name
         timestamp = datetime.utcnow().isoformat()
+
 
         logger.info(
             f"[Ingestion] Starting | tenant={tenant_id} | "
@@ -73,17 +78,17 @@ class DataIngestionPipeline:
         # 2. Lakera Guard scan
         if self.lakera:
             result = self.lakera.scan_document(
-                content[:2000], path.name, "admin", "ingestion"
+                content[:2000], source_name, "admin", "ingestion"
             )
             if result.flagged:
                 logger.warning(
-                    f"[Ingestion] Lakera blocked | file={path.name} "
+                    f"[Ingestion] Lakera blocked | file={source_name} "
                     f"| threat={result.threat.value}"
                 )
                 return {
                     "status": "blocked",
                     "reason": result.message,
-                    "file":   path.name,
+                    "file":   source_name,
                 }
 
         # 3. Chunk
@@ -99,18 +104,18 @@ class DataIngestionPipeline:
             store.add_document(
                 tenant_id = tenant_id,
                 content   = chunk,
-                source    = path.name,
+                source    = source_name,
                 timestamp = timestamp,
                 category  = category,
                 db_type   = db_type,
             )
 
         # 5. Update knowledge graph
-        self.knowledge_graph.update_from_document(content, path.name)
+        self.knowledge_graph.update_from_document(content, source_name)
 
         report = {
             "status":      "success",
-            "file":        path.name,
+            "file":        source_name,
             "chunks":      len(chunks),
             "category":    category,
             "db_type":     db_type,

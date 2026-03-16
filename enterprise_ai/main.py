@@ -214,7 +214,8 @@ class EnterpriseAIAssistant:
              user_id: str,
              user_role: Role      = Role.EMPLOYEE,
              tenant_id: str       = "dev_tenant",
-             session_id: Optional[str] = None) -> str:
+             session_id: Optional[str] = None,
+             history: Optional[list] = None) -> str:
 
         session_id     = session_id or str(uuid.uuid4())
         interaction_id = str(uuid.uuid4())
@@ -348,13 +349,19 @@ class EnterpriseAIAssistant:
                 "Please set OPENAI_API_KEY in your .env file."
             )
         try:
+            # Build messages list with conversation history for multi-turn memory
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            # Inject prior turns (up to last 10 to keep context window manageable)
+            if history:
+                for turn in history[-10:]:
+                    if turn.get("role") in ("user", "assistant") and turn.get("content"):
+                        messages.append({"role": turn["role"], "content": turn["content"]})
+            messages.append({"role": "user", "content": user_message})
+
             llm_response = self.openai.chat.completions.create(
-                model    = os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages = [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user",   "content": user_message},
-                ],
-                temperature = 0.1,
+                model       = os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                messages    = messages,
+                temperature = 0.2,
                 max_tokens  = 1500,
             )
             llm_output  = llm_response.choices[0].message.content or ""
@@ -469,18 +476,20 @@ class EnterpriseAIAssistant:
                         tenant_id: str,
                         category: str    = "general",
                         uploaded_by: str = "admin",
-                        db_type: str     = "public") -> dict:
+                        db_type: str     = "public",
+                        original_filename: str = "") -> dict:
         """
         Admin uploads a document into the tenant's knowledge base.
         db_type='public'  → all employees can access
         db_type='private' → managers, team leads, admins only
         """
         return self.ingestion.ingest(
-            file_path   = file_path,
-            tenant_id   = tenant_id,
-            category    = category,
-            uploaded_by = uploaded_by,
-            db_type     = db_type,
+            file_path         = file_path,
+            tenant_id         = tenant_id,
+            category          = category,
+            uploaded_by       = uploaded_by,
+            db_type           = db_type,
+            original_filename = original_filename,
         )
 
     # ── Metrics ───────────────────────────────────────────────────────────

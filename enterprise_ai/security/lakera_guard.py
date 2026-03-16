@@ -49,6 +49,9 @@ class LakeraGuard:
         if not self.api_key or self.api_key == "your_lakera_api_key":
             logger.warning("[LakeraGuard] LAKERA_API_KEY not set. Running in pass-through mode.")
             self.api_key = None
+        if not self.project_id or self.project_id == "your_lakera_project_id":
+            logger.warning("[LakeraGuard] LAKERA_PROJECT_ID not configured. Running in pass-through mode.")
+            self.api_key = None  # disable API calls if project ID missing
 
     # ── Internal API call ─────────────────────────────────────────────────
     def _scan(self, messages: list, user_id: str, session_id: str) -> dict:
@@ -74,10 +77,9 @@ class LakeraGuard:
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
-            logger.error(f"[LakeraGuard] API error: {e}")
-            # Fail closed — block on API error
-            return {"results": [{"flagged": True, "categories": {"prompt_injection": True},
-                                 "category_scores": {}}]}
+            logger.error(f"[LakeraGuard] API error: {e} — failing open (pass-through).")
+            # Fail open — allow through on API error (do not silently block users)
+            return {"results": [{"flagged": False, "categories": {}, "category_scores": {}}]}
 
     def _parse(self, raw: dict) -> ScanResult:
         result = raw.get("results", [{}])[0]

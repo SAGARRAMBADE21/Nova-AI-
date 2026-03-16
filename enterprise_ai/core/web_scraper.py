@@ -42,11 +42,11 @@ class WebScraper:
         """
         Scrape content relevant to query.
         If URL is given — scrape directly.
-        Otherwise search for relevant content.
+        Otherwise extract URL from query, or search DuckDuckGo for the best result.
         """
-        target_url = url or self._infer_url(query)
+        target_url = url or self._infer_url(query) or self._search_duckduckgo(query)
         if not target_url:
-            logger.info("[WebScraper] No URL inferred from query.")
+            logger.info("[WebScraper] No URL found and DuckDuckGo search returned nothing.")
             return []
 
         return self._scrape_url(target_url, query)
@@ -144,3 +144,31 @@ class WebScraper:
         urls = re.findall(r'https?://[^\s]+', query)
         return urls[0] if urls else None
 
+    def _search_duckduckgo(self, query: str) -> Optional[str]:
+        """
+        Search DuckDuckGo Lite and return the first result URL.
+        Uses the HTML scraping approach (no API key required).
+        """
+        try:
+            search_url = "https://lite.duckduckgo.com/lite/"
+            response = requests.post(
+                search_url,
+                data={"q": query, "kl": "us-en"},
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                timeout=8,
+                verify=False,
+            )
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            # DuckDuckGo Lite result links are <a class="result-link"> or plain <a> with href starting http
+            for a_tag in soup.find_all("a", href=True):
+                href = a_tag["href"]
+                if href.startswith("http") and "duckduckgo.com" not in href:
+                    logger.info(f"[WebScraper] DuckDuckGo top result: {href}")
+                    return href
+        except Exception as e:
+            logger.warning(f"[WebScraper] DuckDuckGo search failed: {e}")
+        return None

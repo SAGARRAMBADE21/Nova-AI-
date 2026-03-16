@@ -31,6 +31,7 @@ const Users = () => {
   const [inviteRole, setInviteRole] = useState('employee');
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState('');
+  const [emailStatus, setEmailStatus] = useState('');
 
   const fetchUsers = async () => {
     try {
@@ -50,13 +51,23 @@ const Users = () => {
     e.preventDefault();
     setInviting(true);
     setInviteMsg('');
+    setEmailStatus('');
     try {
       const res = await inviteUser({ email: inviteEmail, role: inviteRole });
       setInviteMsg(`✓ ${res.message}`);
+      // Show email delivery status separately
+      if (res.invite_email === 'sent') {
+        setEmailStatus('📧 Invite email sent successfully.');
+      } else if (res.invite_email?.startsWith('skipped')) {
+        setEmailStatus('⚠️ Email not sent — Gmail not configured. Go to Email Settings to set it up.');
+      } else {
+        setEmailStatus(`ℹ️ Email: ${res.invite_email}`);
+      }
       setInviteEmail('');
       fetchUsers();
     } catch (err) {
       setInviteMsg(`✕ ${err instanceof Error ? err.message : 'Invite failed'}`);
+      setEmailStatus('');
     } finally {
       setInviting(false);
     }
@@ -120,6 +131,17 @@ const Users = () => {
         {inviteMsg && (
           <p className={`mt-3 text-sm font-semibold ${inviteMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>
             {inviteMsg}
+          </p>
+        )}
+        {emailStatus && (
+          <p className={`mt-1 text-xs font-medium ${
+            emailStatus.startsWith('📧') ? 'text-green-600' :
+            emailStatus.startsWith('⚠️') ? 'text-amber-600' : 'text-blue-600'
+          }`}>
+            {emailStatus}
+            {emailStatus.startsWith('⚠️') && (
+              <a href="/dashboard/email-settings" className="ml-2 underline font-bold">→ Email Settings</a>
+            )}
           </p>
         )}
       </div>

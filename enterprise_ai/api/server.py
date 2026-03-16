@@ -101,12 +101,14 @@ class InviteUserRequest(BaseModel):
 class ChatRequest(BaseModel):
     prompt:     str
     session_id: Optional[str] = None
+    history:    Optional[list] = None   # [{role: 'user'|'assistant', content: str}]
 
 class ChatResponse(BaseModel):
     response:   str
     session_id: Optional[str]
     tenant_id:  str
     role:       str
+    sources:    list = []
 
 class IngestRequest(BaseModel):
     file_path: str
@@ -295,13 +297,23 @@ async def chat(
         user_role   = role,
         tenant_id   = token.tenant_id,
         session_id  = request.session_id,
+        history     = request.history or [],
     )
+
+    # Pull sources from the last retrieval for the frontend to display
+    sources: list = []
+    try:
+        ctx_sources = getattr(assistant, "_last_sources", [])
+        sources = ctx_sources or []
+    except Exception:
+        pass
 
     return ChatResponse(
         response   = response,
         session_id = request.session_id,
         tenant_id  = token.tenant_id,
         role       = token.role,
+        sources    = sources,
     )
 
 
@@ -449,6 +461,44 @@ async def set_email_config(
     }
 
 
+@app.post("/test-email")
+async def test_email(
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """
+    Admin-only: Send a test email to themselves to verify Gmail credentials work.
+    """
+    if token.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can send test emails.")
+
+    email_cfg = assistant.tenant_manager.get_email_config(token.tenant_id)
+    if not email_cfg:
+        raise HTTPException(
+            status_code=400,
+            detail="No email config found. Please save your Gmail credentials first."
+        )
+
+    sent = send_invite_email(
+        to_email        = token.email or token.user_id,
+        company_name    = "Nova AI",
+        join_code       = "TEST-EMAIL",
+        role            = token.role,
+        invited_by      = "Nova AI (test)",
+        sender_email    = email_cfg.get("sender_email", ""),
+        sender_password = email_cfg.get("sender_password", ""),
+    )
+
+    if sent:
+        return {"status": "sent", "message": f"Test email sent to {token.email or token.user_id}."}
+    else:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to send test email. Check your Gmail address and App Password. "
+                   "Make sure 2-Step Verification is enabled and you are using a Gmail App Password "
+                   "(not your normal Gmail password)."
+        )
+
+
 @app.get("/metrics")
 async def metrics(
     token: ClerkTokenPayload = Depends(get_current_user),
@@ -483,11 +533,12 @@ async def upload_document(
             tmp_path = tmp.name
 
         result = assistant.ingest_document(
-            file_path   = tmp_path,
-            tenant_id   = token.tenant_id,
-            category    = category,
-            uploaded_by = token.user_id,
-            db_type     = db_type,
+            file_path         = tmp_path,
+            tenant_id         = token.tenant_id,
+            category          = category,
+            uploaded_by       = token.user_id,
+            db_type           = db_type,
+            original_filename = file.filename or "",
         )
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -508,6 +559,186 @@ async def list_documents(
     """List all ingested source files for this tenant (both DBs)."""
     docs = assistant.list_documents(token.tenant_id)
     return {"documents": docs}
+
+
+
+# ── Tools / Plugins API ───────────────────────────────────────────────────
+
+@app.get("/tools")
+async def list_tools(
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """List all available tools (plugins) and their actions."""
+    plugins = assistant.plugins.describe_all()
+    return {"tools": plugins}
+
+
+@app.get("/tools/health")
+async def tools_health(
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """Check connectivity / health status of all tools."""
+    if token.role not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Managers and admins only.")
+    report = assistant.plugins.health_report()
+    return {"health": report}
+
+
+@app.get("/tools/connection-status")
+async def tools_connection_status(
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """Check if Google Workspace is connected (token file exists and is valid)."""
+    import os
+    token_file = os.getenv("GOOGLE_TOKEN_FILE", "./credentials/google_token.json")
+    connected  = os.path.exists(token_file)
+    detail     = "Connected" if connected else "Not connected"
+    return {"connected": connected, "detail": detail, "token_file": token_file}
+
+
+@app.get("/tools/connect/google")
+async def connect_google(
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """
+    Generate a Google OAuth authorisation URL.
+    Works with both 'installed' (desktop) and 'web' OAuth client types.
+    """
+    if token.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can connect Google Workspace.")
+
+    import os
+    import json
+    from google_auth_oauthlib.flow import Flow
+
+    creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "./enterprise_ai/credentials/google_credentials.json")
+    if not os.path.exists(creds_file):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Google credentials file not found at: {creds_file}. "
+                "Download from Google Cloud Console → APIs & Services → Credentials "
+                "→ OAuth 2.0 Client IDs → Download JSON → save as enterprise_ai/credentials/google_credentials.json"
+            ),
+        )
+
+    # Detect credential type (installed vs web)
+    with open(creds_file) as f:
+        cred_data = json.load(f)
+    cred_type = "installed" if "installed" in cred_data else "web"
+
+    SCOPES = [
+        "https://www.googleapis.com/auth/gmail.modify",
+        "https://mail.google.com/",
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/documents",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/meetings.space.created",
+    ]
+
+    # For installed apps, we use the loopback redirect
+    REDIRECT_URI = (
+        "http://localhost:8000/tools/callback/google"
+        if cred_type == "web"
+        else os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8000/tools/callback/google")
+    )
+
+    try:
+        flow = Flow.from_client_secrets_file(creds_file, scopes=SCOPES, redirect_uri=REDIRECT_URI)
+        auth_url, _ = flow.authorization_url(
+            prompt="consent",
+            access_type="offline",
+            include_granted_scopes="true",
+        )
+        return {"auth_url": auth_url, "cred_type": cred_type}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to generate auth URL: {e}")
+
+
+@app.get("/tools/callback/google")
+async def google_oauth_callback(
+    code: str,
+    state: Optional[str] = None,
+):
+    """
+    OAuth callback — exchanges the code for tokens and saves them.
+    Accessible without auth since Google redirects here directly.
+    """
+    import os, json
+    from google_auth_oauthlib.flow import Flow
+
+    creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "./credentials/google_credentials.json")
+    token_file = os.getenv("GOOGLE_TOKEN_FILE", "./credentials/google_token.json")
+    REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8000/tools/callback/google")
+
+    SCOPES = [
+        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/documents",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/calendar",
+    ]
+
+    if not os.path.exists(creds_file):
+        raise HTTPException(status_code=400, detail="credentials/google_credentials.json not found.")
+
+    try:
+        flow = Flow.from_client_secrets_file(creds_file, scopes=SCOPES, redirect_uri=REDIRECT_URI)
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+
+        # Ensure credentials directory exists
+        os.makedirs(os.path.dirname(token_file) if os.path.dirname(token_file) else ".", exist_ok=True)
+
+        # Save token JSON
+        token_data = {
+            "token":         creds.token,
+            "refresh_token": creds.refresh_token,
+            "token_uri":     creds.token_uri,
+            "client_id":     creds.client_id,
+            "client_secret": creds.client_secret,
+            "scopes":        list(creds.scopes) if creds.scopes else [],
+        }
+        with open(token_file, "w") as f:
+            json.dump(token_data, f, indent=2)
+
+        logger.info(f"[GoogleOAuth] Token saved to {token_file}")
+
+        # Re-initialise all plugins so they pick up the new token
+        assistant.plugins._register_all()
+
+        # Redirect to dashboard tools page
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="http://localhost:5173/dashboard/tools?connected=1")
+
+    except Exception as e:
+        logger.error(f"[GoogleOAuth] Callback error: {e}")
+        raise HTTPException(status_code=400, detail=f"OAuth failed: {e}")
+
+
+class ToolExecuteRequest(BaseModel):
+    plugin: str
+    action: str
+    params: dict = {}
+
+@app.post("/tools/execute")
+async def execute_tool(
+    request: ToolExecuteRequest,
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """Execute a specific plugin action."""
+    if token.role not in ("admin", "manager", "team_lead"):
+        raise HTTPException(status_code=403,
+                            detail="You don't have permission to execute tools.")
+    result = assistant.plugins.execute(request.plugin, request.action, request.params)
+    return {
+        "plugin":  result.plugin,
+        "action":  result.action,
+        "success": result.success,
+        "message": result.message,
+        "data":    result.data,
+    }
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────

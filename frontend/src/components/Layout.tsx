@@ -1,14 +1,25 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, FileText, Mail, BarChart3, 
-  MessageSquare, LogOut 
+  MessageSquare, LogOut, Zap
 } from 'lucide-react';
 
 const Layout = () => {
   const navigate = useNavigate();
 
+  // Read logged-in user info from localStorage
+  const userEmail = localStorage.getItem('nova_email') || 'admin@acme.com';
+  const userRole = localStorage.getItem('nova_role') || 'admin';
+  const userInitials = userEmail
+    .split('@')[0]
+    .split(/[._-]/)
+    .map((part: string) => part[0]?.toUpperCase() || '')
+    .slice(0, 2)
+    .join('') || 'U';
+
   const handleLogout = () => {
     localStorage.removeItem("nova_token");
+    localStorage.removeItem("nova_email");
     localStorage.removeItem("nova_role");
     navigate('/login');
   };
@@ -61,6 +72,9 @@ const Layout = () => {
           <NavLink to="/dashboard/metrics" className={navLinkClass}>
             <BarChart3 className="mr-3 h-5 w-5" /> Metrics
           </NavLink>
+          <NavLink to="/dashboard/tools" className={navLinkClass}>
+            <Zap className="mr-3 h-5 w-5" /> Tools
+          </NavLink>
         </nav>
 
         <div className="p-4 border-t border-brand-border space-y-4">
@@ -68,10 +82,10 @@ const Layout = () => {
             <MessageSquare className="mr-3 h-5 w-5" /> Go to Chat
           </button>
           <div className="flex items-center space-x-3 px-2">
-            <div className="h-9 w-9 rounded-full bg-brand-charcoal text-white flex items-center justify-center text-sm font-bold">JD</div>
+            <div className="h-9 w-9 rounded-full bg-brand-charcoal text-white flex items-center justify-center text-sm font-bold">{userInitials}</div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-brand-charcoal truncate">admin@acme.com</p>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-brand-orange">Admin</span>
+              <p className="text-xs font-semibold text-brand-charcoal truncate">{userEmail}</p>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-brand-orange">{userRole}</span>
             </div>
           </div>
           <button className="w-full text-left flex items-center px-2 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors" onClick={handleLogout}>

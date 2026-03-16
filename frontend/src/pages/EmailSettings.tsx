@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
-import { setEmailConfig } from '@/lib/api';
+import { setEmailConfig, testEmail } from '@/lib/api';
 
 const EmailSettings = () => {
   const [senderEmail, setSenderEmail] = useState('');
@@ -8,6 +8,9 @@ const EmailSettings = () => {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [success, setSuccess] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState('');
+  const [testSuccess, setTestSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +25,22 @@ const EmailSettings = () => {
       setSuccess(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setTesting(true);
+    setTestMsg('');
+    setTestSuccess(false);
+    try {
+      const res = await testEmail();
+      setTestMsg(`✓ ${res.message}`);
+      setTestSuccess(true);
+    } catch (err) {
+      setTestMsg(`✕ ${err instanceof Error ? err.message : 'Test failed. Check credentials.'}`);
+      setTestSuccess(false);
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -91,7 +110,20 @@ const EmailSettings = () => {
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+          <button
+            className="flex-1 bg-white border border-brand-border text-brand-charcoal py-3 rounded-full font-bold hover:bg-brand-lightBg transition-all disabled:opacity-50"
+            type="button"
+            disabled={testing}
+            onClick={handleTestEmail}
+          >
+            {testing ? 'Sending...' : '📧 Send Test Email'}
+          </button>
         </div>
+        {testMsg && (
+          <p className={`text-sm font-semibold mt-2 ${testSuccess ? 'text-green-600' : 'text-red-500'}`}>
+            {testMsg}
+          </p>
+        )}
       </form>
     </section>
   );
