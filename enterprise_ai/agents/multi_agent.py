@@ -119,12 +119,22 @@ class RetrievalAgent(BaseAgent):
 # ── 3. Validation Agent ───────────────────────────────────────────────────
 
 class ValidationAgent(BaseAgent):
-    """Cross-checks retrieval results. Flags HITL if confidence is LOW."""
+    """Cross-checks retrieval results. Only flags HITL for sensitive + low-confidence queries."""
 
-    HITL_THRESHOLD = ConfidenceLevel.LOW
+    # Keywords that indicate the query is genuinely sensitive
+    SENSITIVE_KEYWORDS = [
+        "salary", "approve", "delete", "fire", "terminate",
+        "financial", "legal", "compliance", "lawsuit", "contract",
+        "confidential", "private", "secret", "payroll", "budget",
+        "dismiss", "layoff", "redundancy", "audit",
+    ]
 
     def __init__(self):
         super().__init__("ValidationAgent")
+
+    def _is_sensitive(self, query: str) -> bool:
+        q = query.lower()
+        return any(kw in q for kw in self.SENSITIVE_KEYWORDS)
 
     def run(self, ctx: AgentContext) -> AgentContext:
         if ctx.blocked or not ctx.retrieval:
@@ -140,13 +150,15 @@ class ValidationAgent(BaseAgent):
                 f"[{self.name}] Conflicts: {ctx.retrieval.conflicts}"
             )
 
-        if ctx.retrieval.confidence == ConfidenceLevel.LOW:
+        # Only escalate to HITL when confidence is LOW **and** query is sensitive
+        if (ctx.retrieval.confidence == ConfidenceLevel.LOW
+                and self._is_sensitive(ctx.query)):
             ctx.hitl_required = True
             ctx.hitl_reason   = (
-                f"Low confidence retrieval (score below threshold). "
+                "Sensitive query with low-confidence retrieval. "
                 f"Conflicts: {ctx.retrieval.conflicts or 'None'}"
             )
-            logger.info(f"[{self.name}] HITL triggered: low confidence")
+            logger.info(f"[{self.name}] HITL triggered: sensitive + low confidence")
 
         ctx.validated = True
         return ctx

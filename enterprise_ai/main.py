@@ -223,7 +223,10 @@ class EnterpriseAIAssistant:
         Convert every plugin's ActionSchema into OpenAI function-calling format.
         Only returns tools when Google credentials are available (connected).
         """
-        token_file = os.getenv("GOOGLE_TOKEN_FILE", "./enterprise_ai/credentials/google_token.json")
+        token_file = os.getenv(
+            "GOOGLE_TOKEN_FILE",
+            str(Path(__file__).parent / "credentials" / "google_token.json")
+        )
         if not os.path.exists(token_file):
             return []   # No token — don't expose tool schemas
 
@@ -232,11 +235,21 @@ class EnterpriseAIAssistant:
             for schema in self.plugins.get_schema(plugin_name):
                 properties: dict = {}
                 required_params: list = []
+                # Map Python/plugin type names to valid JSON Schema types
+                _TYPE_MAP = {
+                    "string": "string", "str": "string",
+                    "integer": "number", "int": "number", "number": "number", "float": "number",
+                    "boolean": "boolean", "bool": "boolean",
+                    "list": "array", "array": "array",
+                    "dict": "object", "object": "object",
+                }
                 for p in schema.params:
-                    prop: dict = {"type": p.type if p.type != "integer" else "number",
-                                  "description": p.description}
+                    json_type = _TYPE_MAP.get(p.type, "string")
+                    prop: dict = {"type": json_type, "description": p.description}
                     if p.choices:
                         prop["enum"] = p.choices
+                    if json_type == "array":
+                        prop["items"] = {"type": "string"}
                     properties[p.name] = prop
                     if p.required:
                         required_params.append(p.name)
