@@ -349,9 +349,12 @@ async def chat(
 
     # Pull sources from the last retrieval for the frontend to display
     sources: list = []
+    tools_used: list = []
     try:
         ctx_sources = getattr(assistant, "_last_sources", [])
         sources = ctx_sources or []
+        ctx_tools = getattr(assistant, "_last_tool_results", [])
+        tools_used = ctx_tools or []
     except Exception:
         pass
 
@@ -361,6 +364,7 @@ async def chat(
         tenant_id  = token.tenant_id,
         role       = token.role,
         sources    = sources,
+        tools_used = tools_used,
     )
 
 

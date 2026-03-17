@@ -25,8 +25,8 @@ class GoogleMeetPlugin(BasePlugin):
         "list_upcoming_meetings",
     ]
 
-    def __init__(self):
-        self._calendar = GoogleCalendarPlugin()
+    def __init__(self, calendar_plugin=None):
+        self._calendar = calendar_plugin or GoogleCalendarPlugin()
 
     def health_check(self) -> bool:
         return self._calendar.health_check()

@@ -28,25 +28,27 @@ class GmailPlugin(BasePlugin):
     ]
 
     def __init__(self):
-        self.service = self._init_service()
+        self._service = None
 
-    def _init_service(self):
-        try:
-            from googleapiclient.discovery import build
-            creds = self._google_creds()
-            if creds:
-                return build("gmail", "v1", credentials=creds)
-        except Exception as e:
-            logger.warning(f"[Gmail] Init failed: {e}")
-        return None
+    def _ensure_service(self):
+        """Lazy-init / re-init the Gmail service with fresh credentials."""
+        if not self._service:
+            self._service = self._build_google_service("gmail", "v1")
+        return self._service
+
+    @property
+    def service(self):
+        return self._ensure_service()
 
     def health_check(self) -> bool:
-        if not self.service:
+        svc = self._ensure_service()
+        if not svc:
             return False
         try:
-            self.service.users().getProfile(userId="me").execute()
+            svc.users().getProfile(userId="me").execute()
             return True
         except Exception:
+            self._service = None  # force re-init on next call
             return False
 
     # ── Schema ────────────────────────────────────────────────────────────

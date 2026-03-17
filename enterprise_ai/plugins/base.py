@@ -212,6 +212,25 @@ class BasePlugin(ABC):
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
+                # Persist the refreshed token so future loads pick it up
+                with open(token_file, "w") as f:
+                    f.write(creds.to_json())
+                logger.info("[GoogleAuth] Token refreshed and saved.")
             except Exception as e:
                 logger.warning(f"[GoogleAuth] Token refresh failed: {e}")
         return creds if creds and creds.valid else None
+
+    @classmethod
+    def _build_google_service(cls, api: str, version: str):
+        """Build a Google API service with fresh credentials.
+        Call this instead of caching the service only at __init__ time,
+        so that expired tokens get refreshed automatically."""
+        try:
+            from googleapiclient.discovery import build
+            creds = cls._google_creds()
+            if creds:
+                return build(api, version, credentials=creds)
+        except Exception as e:
+            logger.warning(f"[GoogleAuth] Failed to build {api}/{version}: {e}")
+        return None
+

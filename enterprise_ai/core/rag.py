@@ -111,7 +111,7 @@ class SelfCorrectingRAG:
     Assigns confidence score — LOW confidence triggers HITL.
     """
 
-    RELEVANCE_THRESHOLD  = 0.7
+    RELEVANCE_THRESHOLD  = 0.65   # lowered from 0.7 — captures more valid chunks
     MAX_REFRAME_ATTEMPTS = 3
 
     def __init__(self, public_store, private_store,
@@ -246,9 +246,10 @@ class SelfCorrectingRAG:
         avg_score = sum(c.score for c in chunks) / len(chunks)
         if conflicts:
             avg_score *= 0.8
-        if avg_score >= 0.75:
+        # Require multiple chunks for HIGH — single chunk is not reliable enough
+        if avg_score >= 0.75 and len(chunks) >= 2:
             return ConfidenceLevel.HIGH
-        elif avg_score >= 0.50:
+        elif avg_score >= 0.55 or (avg_score >= 0.75 and len(chunks) == 1):
             return ConfidenceLevel.MEDIUM
         return ConfidenceLevel.LOW
 
@@ -261,8 +262,10 @@ class SelfCorrectingRAG:
         # LLM-based reframing (preferred)
         if self.openai:
             try:
+                import os as _os
+                reframe_model = _os.getenv("OPENAI_MODEL", "gpt-4o-mini")
                 resp = self.openai.chat.completions.create(
-                    model    = "gpt-4",
+                    model    = reframe_model,
                     messages = [
                         {
                             "role": "system",

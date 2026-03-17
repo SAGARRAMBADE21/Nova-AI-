@@ -102,6 +102,14 @@ export interface ChatResponse {
   tenant_id: string;
   role: string;
   sources?: string[];
+  tools_used?: Array<{
+    plugin: string;
+    action: string;
+    success: boolean;
+    message: string;
+    data?: unknown;
+    url?: string;
+  }>;
 }
 
 export function sendChat(data: ChatPayload) {

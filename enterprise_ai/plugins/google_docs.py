@@ -24,38 +24,38 @@ class GoogleDocsPlugin(BasePlugin):
     ]
 
     def __init__(self):
-        self.service     = self._init_docs_service()
-        self.drive_svc   = self._init_drive_service()
+        self._service   = None
+        self._drive_svc = None
 
-    def _init_docs_service(self):
-        try:
-            from googleapiclient.discovery import build
-            creds = self._google_creds()
-            if creds:
-                return build("docs", "v1", credentials=creds)
-        except Exception as e:
-            logger.warning(f"[GoogleDocs] Docs init failed: {e}")
-        return None
+    def _ensure_service(self):
+        """Lazy-init / re-init the Docs service with fresh credentials."""
+        if not self._service:
+            self._service = self._build_google_service("docs", "v1")
+        return self._service
 
-    def _init_drive_service(self):
-        try:
-            from googleapiclient.discovery import build
-            creds = self._google_creds()
-            if creds:
-                return build("drive", "v3", credentials=creds)
-        except Exception as e:
-            logger.warning(f"[GoogleDocs] Drive init failed: {e}")
-        return None
+    def _ensure_drive_service(self):
+        """Lazy-init / re-init the Drive service (for sharing)."""
+        if not self._drive_svc:
+            self._drive_svc = self._build_google_service("drive", "v3")
+        return self._drive_svc
+
+    @property
+    def service(self):
+        return self._ensure_service()
+
+    @property
+    def drive_svc(self):
+        return self._ensure_drive_service()
 
     def health_check(self) -> bool:
-        return bool(self.service)
+        return bool(self._ensure_service())
 
     # ── Schema ────────────────────────────────────────────────────────────
 
     def get_schema(self):
         return [
             ActionSchema("create_document", "Create a new Google Doc.", [
-                ParamSpec("title",   "string", required=False, description="Document title.", default="New Document"),
+                ParamSpec("title",   "string", required=True,  description="Document title (must be provided by the user)."),
                 ParamSpec("content", "string", required=False, description="Initial text content."),
             ]),
             ActionSchema("get_document", "Retrieve the text content of a Google Doc.", [

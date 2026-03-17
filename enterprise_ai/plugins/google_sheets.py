@@ -25,20 +25,20 @@ class GoogleSheetsPlugin(BasePlugin):
     ]
 
     def __init__(self):
-        self.service = self._init_service()
+        self._service = None
 
-    def _init_service(self):
-        try:
-            from googleapiclient.discovery import build
-            creds = self._google_creds()
-            if creds:
-                return build("sheets", "v4", credentials=creds)
-        except Exception as e:
-            logger.warning(f"[GoogleSheets] Init failed: {e}")
-        return None
+    def _ensure_service(self):
+        """Lazy-init / re-init the Sheets service with fresh credentials."""
+        if not self._service:
+            self._service = self._build_google_service("sheets", "v4")
+        return self._service
+
+    @property
+    def service(self):
+        return self._ensure_service()
 
     def health_check(self) -> bool:
-        return bool(self.service)
+        return bool(self._ensure_service())
 
     # ── Schema ────────────────────────────────────────────────────────────
 

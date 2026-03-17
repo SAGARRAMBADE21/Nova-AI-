@@ -37,13 +37,15 @@ class PluginRegistry:
         self._register_all()
 
     def _register_all(self):
+        # Create calendar plugin first so Meet can share it
+        calendar_plugin = GoogleCalendarPlugin()
         plugins = [
             GoogleDrivePlugin(),
             GoogleDocsPlugin(),
             GoogleSheetsPlugin(),
-            GoogleCalendarPlugin(),
+            calendar_plugin,
             GmailPlugin(),
-            GoogleMeetPlugin(),
+            GoogleMeetPlugin(calendar_plugin=calendar_plugin),
         ]
         for plugin in plugins:
             self._plugins[plugin.name] = plugin
