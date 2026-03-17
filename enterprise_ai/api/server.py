@@ -446,7 +446,7 @@ async def invite_user(
         )
         result["invite_email"] = (
             "sent" if email_sent
-            else "skipped — configure Gmail via POST /email-config"
+            else "skipped - configure Gmail via POST /email-config"
         )
     else:
         result["invite_email"] = "skipped (company not found)"
