@@ -435,6 +435,9 @@ async def invite_user(
     company    = assistant.tenant_manager.get_company_by_tenant_id(token.tenant_id)
     email_cfg  = assistant.tenant_manager.get_email_config(token.tenant_id)
     if company:
+        has_tenant_email_config = bool((email_cfg or {}).get("sender_email")) and bool((email_cfg or {}).get("sender_password"))
+        has_fallback_email_config = bool(os.getenv("EMAIL_USER", "").strip()) and bool(os.getenv("EMAIL_PASSWORD", "").strip())
+        has_any_email_config = has_tenant_email_config or has_fallback_email_config
         email_sent = send_invite_email(
             to_email        = request.email,
             company_name    = company["company_name"],
@@ -445,8 +448,13 @@ async def invite_user(
             sender_password = (email_cfg or {}).get("sender_password", ""),
         )
         result["invite_email"] = (
-            "sent" if email_sent
-            else "skipped - configure Gmail via POST /email-config"
+            "sent"
+            if email_sent
+            else (
+                "failed - check Gmail App Password or SMTP access"
+                if has_any_email_config
+                else "skipped - configure Gmail via POST /email-config"
+            )
         )
     else:
         result["invite_email"] = "skipped (company not found)"

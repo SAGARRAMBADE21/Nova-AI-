@@ -1,7 +1,7 @@
 """
 core/web_scraper.py
 Web Scraping Layer
-Pipeline: URL → Scrape → Extract → Clean → Lakera Scan → Chunk → Embed
+Pipeline: URL → Scrape → Extract → Clean → Chunk → Embed
 Rules: Public only | Respect robots.txt | TTL management
 """
 
@@ -32,9 +32,6 @@ class ScrapedContent:
 
 
 class WebScraper:
-
-    def __init__(self, lakera_guard=None):
-        self.lakera = lakera_guard
 
     # ── Public interface ─────────────────────────────────────────────────
 
@@ -97,15 +94,7 @@ class WebScraper:
         lines   = [l.strip() for l in text.splitlines() if len(l.strip()) > 40]
         content = "\n".join(lines[:100])  # Limit to 100 lines
 
-        # 5. Lakera scan
-        if self.lakera:
-            from security.lakera_guard import LakeraGuard
-            result = self.lakera.scan_document(content, url, "system", "scraper")
-            if result.flagged:
-                logger.warning(f"[WebScraper] Lakera blocked scraped content | url={url}")
-                return []
-
-        # 6. Chunk
+        # 5. Chunk
         chunks  = self._chunk(content, url, title)
 
         logger.info(f"[WebScraper] Scraped {len(chunks)} chunks | url={url}")
