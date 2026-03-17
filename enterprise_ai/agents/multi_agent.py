@@ -96,6 +96,7 @@ class RetrievalAgent(BaseAgent):
             query            = ctx.query,
             tenant_id        = ctx.tenant_id,
             allowed_db_types = ctx.allowed_db_types,
+            top_k            = 10,
         )
 
         # Web scraping fallback for low-confidence results
@@ -107,7 +108,8 @@ class RetrievalAgent(BaseAgent):
                 for s in scraped:
                     ctx.retrieval.chunks.append(Chunk(
                         content   = s.content,
-                        source    = s.source,
+                        # Mark distinctly so the LLM system prompt catches it
+                        source    = f"[WEB] {s.source}", 
                         timestamp = s.timestamp,
                         score     = s.score,
                     ))
@@ -150,15 +152,19 @@ class ValidationAgent(BaseAgent):
                 f"[{self.name}] Conflicts: {ctx.retrieval.conflicts}"
             )
 
-        # Only escalate to HITL when confidence is LOW **and** query is sensitive
-        if (ctx.retrieval.confidence == ConfidenceLevel.LOW
-                and self._is_sensitive(ctx.query)):
+        # Trigger HITL/Warning when confidence is not HIGH
+        if ctx.retrieval.confidence != ConfidenceLevel.HIGH:
             ctx.hitl_required = True
-            ctx.hitl_reason   = (
-                "Sensitive query with low-confidence retrieval. "
+            
+            reason_msg = "Non-high confidence retrieval."
+            if self._is_sensitive(ctx.query):
+                reason_msg = "Sensitive query with non-high confidence retrieval."
+                
+            ctx.hitl_reason = (
+                f"{reason_msg} "
                 f"Conflicts: {ctx.retrieval.conflicts or 'None'}"
             )
-            logger.info(f"[{self.name}] HITL triggered: sensitive + low confidence")
+            logger.info(f"[{self.name}] HITL triggered: {reason_msg}")
 
         ctx.validated = True
         return ctx
