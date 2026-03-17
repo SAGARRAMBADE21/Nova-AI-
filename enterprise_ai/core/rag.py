@@ -111,7 +111,7 @@ class SelfCorrectingRAG:
     Assigns confidence score — LOW confidence triggers HITL.
     """
 
-    RELEVANCE_THRESHOLD  = 0.5
+    RELEVANCE_THRESHOLD  = 0.7
     MAX_REFRAME_ATTEMPTS = 3
 
     def __init__(self, public_store, private_store,

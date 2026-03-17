@@ -214,15 +214,15 @@ class DataIngestionPipeline:
         return soup.get_text(separator="\n", strip=True)
 
     def _chunk(self, content: str,
-                chunk_size: int = 400,
-                overlap:    int = 60) -> list[str]:
+                chunk_size: int = 200,
+                overlap:    int = 30) -> list[str]:
         """
         Split content into overlapping word-window chunks.
         Overlap prevents context from being cut at chunk boundaries,
         which is a common RAG retrieval quality issue.
 
-        chunk_size = 400 words  (~600 tokens, well under embedding limit)
-        overlap    = 60  words  (~15% overlap — enough for boundary context)
+        chunk_size = 200 words
+        overlap    = 30  words
         """
         words = content.split()
         if not words:
