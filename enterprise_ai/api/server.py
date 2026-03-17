@@ -82,6 +82,68 @@ def _resolve_google_path(env_key: str, filename: str) -> str:
 
     return str(enterprise_root / "credentials" / filename)
 
+# ── Upload / Ingestion Limits & Validation ───────────────────────────────────
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))  # 20 MB default
+MAX_DOCS_PER_TENANT = int(os.getenv("MAX_DOCS_PER_TENANT", "1000"))
+ALLOWED_UPLOAD_EXTENSIONS = {
+    ".pdf",
+    ".docx",
+    ".xlsx",
+    ".csv",
+    ".txt",
+    ".json",
+    ".xml",
+    ".md",
+    ".jpg",
+    ".jpeg",
+}
+
+# ── Google OAuth config helpers ──────────────────────────────────────────
+
+GOOGLE_OAUTH_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/meetings.space.created",
+]
+
+
+def _resolve_google_path(env_key: str, filename: str) -> str:
+    """Resolve Google credential/token paths robustly across cwd and .env variants."""
+    workspace_root = pathlib.Path(__file__).resolve().parents[2]
+    enterprise_root = pathlib.Path(__file__).resolve().parents[1]
+
+    def _candidates(raw: str) -> list[pathlib.Path]:
+        p = pathlib.Path(raw)
+        if p.is_absolute():
+            return [p]
+        cleaned = raw.lstrip("./\\")
+        return [
+            workspace_root / p,
+            enterprise_root / p,
+            workspace_root / cleaned,
+            enterprise_root / cleaned,
+        ]
+
+    raw_env = os.getenv(env_key, "").strip()
+    if raw_env:
+        for candidate in _candidates(raw_env):
+            if candidate.exists() or candidate.parent.exists():
+                return str(candidate)
+
+    for default_rel in (
+        f"enterprise_ai/credentials/{filename}",
+        f"credentials/{filename}",
+    ):
+        for candidate in _candidates(default_rel):
+            if candidate.exists() or candidate.parent.exists():
+                return str(candidate)
+
+    return str(enterprise_root / "credentials" / filename)
+
 # ── CORS — allow Vite dev server ──────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
@@ -580,7 +642,8 @@ async def upload_document(
 ):
     """
     Admin-only: upload a file directly from the browser.
-    Saves to a temp file, runs the ingestion pipeline, then deletes the temp file.
+    Applies server-side validation for file type, size, and per-tenant limits,
+    then saves to a temp file, runs the ingestion pipeline, and deletes the temp file.
     """
     if token.role != "admin":
         raise HTTPException(status_code=403,
@@ -589,7 +652,44 @@ async def upload_document(
         raise HTTPException(status_code=400,
                             detail="db_type must be 'public' or 'private'.")
 
-    suffix   = pathlib.Path(file.filename or "upload").suffix or ".bin"
+    # ── Validate file extension ──────────────────────────────────────────────
+    filename = file.filename or "upload"
+    suffix   = pathlib.Path(filename).suffix.lower() or ".bin"
+    if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_UPLOAD_EXTENSIONS))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{suffix}'. Allowed types: {allowed}",
+        )
+
+    # ── Validate file size ───────────────────────────────────────────────────
+    try:
+        file.file.seek(0, os.SEEK_END)
+        size_bytes = file.file.tell()
+        file.file.seek(0)
+    except Exception:
+        size_bytes = 0
+
+    if size_bytes and size_bytes > MAX_UPLOAD_BYTES:
+        max_mb = round(MAX_UPLOAD_BYTES / (1024 * 1024))
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is {max_mb} MB.",
+        )
+
+    # ── Per-tenant document count limit ──────────────────────────────────────
+    existing_docs = assistant.list_documents(token.tenant_id)
+    if len(existing_docs) >= MAX_DOCS_PER_TENANT:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Document limit reached for this workspace. "
+                "Please archive or delete older documents before uploading more."
+            ),
+        )
+
+    # Use validated suffix (falls back to .bin only if none)
+    suffix   = suffix or ".bin"
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -768,7 +868,7 @@ async def connect_google(
             detail=(
                 f"Google credentials file not found at: {creds_file}. "
                 "Download from Google Cloud Console → APIs & Services → Credentials "
-                "→ OAuth 2.0 Client IDs → Download JSON → save as enterprise_ai/credentials/google_credentials.json"
+                "→ OAuth 2.0 Client IDs → Download JSON → save as Backend/credentials/google_credentials.json"
             ),
         )
 
