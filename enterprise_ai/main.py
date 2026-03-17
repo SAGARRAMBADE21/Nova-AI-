@@ -11,6 +11,7 @@ import os
 import time
 import uuid
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -330,8 +331,41 @@ class EnterpriseAIAssistant:
         # ── LLMOps ────────────────────────────────────────────────────────
         self.llmops   = LLMOpsLogger()
         self.metrics  = MetricsCollector()
+        self._pending_email_by_session: dict[str, dict] = {}
 
         logger.info("[Assistant] All components ready.")
+
+    def _extract_email_fields(self, text: str) -> dict:
+        """Best-effort extraction of email send fields from natural language."""
+        extracted: dict[str, str] = {}
+
+        # Recipient email address
+        email_matches = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+        if email_matches:
+            extracted["to"] = email_matches[0]
+
+        # Subject patterns: "subject: ..." or "subject is ..."
+        subject_match = re.search(r"subject\s*(?:is|:)?\s*([^,\n]+)", text, re.IGNORECASE)
+        if subject_match:
+            subject = subject_match.group(1).strip().strip('"\'')
+            if subject:
+                extracted["subject"] = subject
+
+        # Body patterns: "body: ..." or "body is ..."
+        body_match = re.search(r"body\s*(?:is|:)?\s*(.+)$", text, re.IGNORECASE)
+        if body_match:
+            body = body_match.group(1).strip().strip('"\'')
+            if body:
+                extracted["body"] = body
+
+        return extracted
+
+    def _is_email_intent(self, text: str) -> bool:
+        lowered = text.lower()
+        return any(k in lowered for k in [
+            "send mail", "send email", "mail to", "email to", "gmail",
+            "subject", "body", "draft email",
+        ])
 
     # ── Tool schema builder ───────────────────────────────────────────────
 
@@ -441,6 +475,56 @@ class EnterpriseAIAssistant:
             f"| tenant={tenant_id} | role={user_role.value}"
         )
         self._last_sources = []
+
+        # ── Session-aware Gmail send flow (multi-turn slot filling) ─────
+        pending_email = self._pending_email_by_session.get(session_id, {}).copy()
+        email_fields = self._extract_email_fields(user_prompt)
+        if email_fields:
+            pending_email.update(email_fields)
+            self._pending_email_by_session[session_id] = pending_email
+
+        if self._is_email_intent(user_prompt) or pending_email:
+            if "to" not in pending_email:
+                return "Please provide the recipient email address."
+            if "subject" not in pending_email:
+                return f"Please provide the subject for the email to {pending_email['to']}."
+            if "body" not in pending_email:
+                return f"Please provide the body for the email to {pending_email['to']}."
+
+            send_result = self.plugins.execute(
+                "gmail",
+                "send_email",
+                params={
+                    "to": pending_email["to"],
+                    "subject": pending_email["subject"],
+                    "body": pending_email["body"],
+                },
+            )
+            self.metrics.record_tool()
+            self.llmops.log_tool_invocation("gmail", "send_email", send_result.success, user_id)
+
+            self._pending_email_by_session.pop(session_id, None)
+            response_text = (
+                f"Email sent to {pending_email['to']} with subject '{pending_email['subject']}'."
+                if send_result.success
+                else f"I could not send the email: {send_result.message}"
+            )
+            self._log_interaction(
+                interaction_id,
+                user_id,
+                session_id,
+                tenant_id,
+                user_prompt,
+                response_text,
+                "N/A",
+                [],
+                [{"plugin": "gmail", "action": "send_email", "status": "completed" if send_result.success else "failed"}],
+                security_events,
+                start_time,
+                0,
+                False,
+            )
+            return response_text
 
         # ── Multi-Agent Pipeline ─────────────────────────────────────────
         ctx = AgentContext(

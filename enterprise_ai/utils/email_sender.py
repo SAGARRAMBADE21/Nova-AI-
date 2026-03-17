@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+BRAND_NAME = os.getenv("APP_BRAND_NAME", "QueryMInd")
 
 
 def _smtp_config() -> dict:
@@ -34,7 +35,7 @@ def _smtp_config() -> dict:
         "port":      int(os.getenv("EMAIL_PORT",  "587")),
         "user":      os.getenv("EMAIL_USER",      ""),
         "password":  os.getenv("EMAIL_PASSWORD",  ""),
-        "from_name": os.getenv("EMAIL_FROM_NAME", "Nova AI"),
+        "from_name": os.getenv("EMAIL_FROM_NAME", BRAND_NAME),
     }
 
 
@@ -75,7 +76,7 @@ def send_invite_email(
         "admin":     "Admin",
     }.get(role, role.capitalize())
 
-    subject = f"You've been invited to {company_name} on Nova AI"
+    subject = f"You've been invited to {company_name} on {BRAND_NAME}"
 
     html_body = f"""
 <!DOCTYPE html>
@@ -87,7 +88,7 @@ def send_invite_email(
     <h2 style="color: #1a1a2e; margin-bottom: 4px;">Welcome to {company_name} 👋</h2>
     <p style="color: #555; margin-top: 0;">
       {invited_by} has invited you to join <strong>{company_name}</strong>
-      on <strong>Nova AI</strong> as <strong>{role_label}</strong>.
+            on <strong>{BRAND_NAME}</strong> as <strong>{role_label}</strong>.
     </p>
 
     <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
@@ -103,7 +104,7 @@ def send_invite_email(
 
     <h3 style="color: #1a1a2e;">How to get started:</h3>
     <ol style="color: #555; line-height: 1.9;">
-      <li>Go to the Nova AI login page</li>
+            <li>Go to the {BRAND_NAME} login page</li>
       <li>Click <strong>"Register"</strong></li>
       <li>Enter the join code above, your email (<strong>{to_email}</strong>), and choose a password</li>
       <li>Done — log in and start using your company AI assistant!</li>
@@ -114,7 +115,7 @@ def send_invite_email(
     <p style="color: #999; font-size: 12px; text-align: center;">
       This invitation was sent by {invited_by} from {company_name}.<br>
       If you weren't expecting this, you can safely ignore this email.<br><br>
-      <strong>Nova AI — Enterprise AI Assistant</strong>
+            <strong>{BRAND_NAME} — Enterprise AI Assistant</strong>
     </p>
   </div>
 </body>
@@ -122,10 +123,10 @@ def send_invite_email(
 """
 
     plain_body = (
-        f"You've been invited to {company_name} on Nova AI as {role_label}.\n\n"
+        f"You've been invited to {company_name} on {BRAND_NAME} as {role_label}.\n\n"
         f"Your company join code: {join_code}\n\n"
         f"Steps:\n"
-        f"1. Go to the Nova AI login page\n"
+        f"1. Go to the {BRAND_NAME} login page\n"
         f"2. Click Register\n"
         f"3. Enter join code: {join_code}\n"
         f"4. Enter your email: {to_email}\n"

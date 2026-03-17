@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { FileText, ShieldCheck, UploadCloud, X } from 'lucide-react';
-import { uploadDocument, listDocuments, type Document } from '@/lib/api';
+import { uploadDocuments, listDocuments, type Document } from '@/lib/api';
 
 const SUPPORTED = ['.pdf', '.docx', '.xlsx', '.csv', '.txt', '.json', '.xml', '.md'];
 
 const Documents = () => {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [category, setCategory] = useState('');
   const [dbType, setDbType] = useState<'public' | 'private'>('public');
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const [uploadMsg, setUploadMsg] = useState('');
   const [uploadOk, setUploadOk] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -30,41 +31,94 @@ const Documents = () => {
 
   useEffect(() => { fetchDocs(); }, []);
 
-  const pickFile = (f: File) => {
-    const ext = '.' + f.name.split('.').pop()?.toLowerCase();
-    if (!SUPPORTED.includes(ext)) {
-      setUploadMsg(`✕ Unsupported file type. Allowed: ${SUPPORTED.join(', ')}`);
+  const pickFiles = (picked: File[]) => {
+    if (picked.length === 0) return;
+
+    const valid: File[] = [];
+    const invalid: string[] = [];
+
+    for (const f of picked) {
+      const ext = '.' + (f.name.split('.').pop()?.toLowerCase() ?? '');
+      if (!SUPPORTED.includes(ext)) {
+        invalid.push(f.name);
+      } else {
+        valid.push(f);
+      }
+    }
+
+    if (valid.length > 0) {
+      setFiles(prev => {
+        const map = new Map(prev.map(x => [`${x.name}-${x.size}-${x.lastModified}`, x]));
+        for (const v of valid) {
+          map.set(`${v.name}-${v.size}-${v.lastModified}`, v);
+        }
+        return [...map.values()];
+      });
+    }
+
+    if (invalid.length > 0) {
+      setUploadMsg(`✕ Unsupported files skipped: ${invalid.join(', ')}. Allowed: ${SUPPORTED.join(', ')}`);
       setUploadOk(false);
       return;
     }
-    setFile(f);
+
     setUploadMsg('');
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) pickFile(f);
+    pickFiles(Array.from(e.dataTransfer.files));
+  };
+
+  const removeFile = (target: File) => {
+    setFiles(prev => prev.filter(f => !(f.name === target.name && f.size === target.size && f.lastModified === target.lastModified)));
+    setUploadMsg('');
   };
 
   const handleSubmit = async () => {
-    if (!file) { setUploadMsg('✕ Please select a file first.'); setUploadOk(false); return; }
+    if (files.length === 0) {
+      setUploadMsg('✕ Please select at least one file first.');
+      setUploadOk(false);
+      return;
+    }
+
     setUploading(true);
+    setUploadProgress({ done: 0, total: files.length });
     setUploadMsg('');
+
+    const succeeded: string[] = [];
+    const failed: string[] = [];
+
     try {
-      await uploadDocument(file, category || 'general', dbType);
-      setUploadMsg('✓ Document uploaded and ingested successfully.');
-      setUploadOk(true);
-      setFile(null);
+      const response = await uploadDocuments(files, category || 'general', dbType);
+      setUploadProgress({ done: files.length, total: files.length });
+
+      for (const item of response.results) {
+        if (item.success) {
+          succeeded.push(item.filename);
+        } else {
+          failed.push(item.filename);
+        }
+      }
+
+      if (failed.length === 0) {
+        setUploadMsg(`✓ ${succeeded.length} document(s) uploaded and ingested successfully.`);
+        setUploadOk(true);
+      } else {
+        setUploadMsg(`✕ Uploaded ${succeeded.length}/${files.length}. Failed: ${failed.join(', ')}`);
+        setUploadOk(false);
+      }
+
+      setFiles([]);
       setCategory('');
       setDbType('public');
-      fetchDocs();
-    } catch (err) {
-      setUploadMsg(`✕ ${err instanceof Error ? err.message : 'Upload failed.'}`);
-      setUploadOk(false);
+      if (succeeded.length > 0) {
+        fetchDocs();
+      }
     } finally {
       setUploading(false);
+      setUploadProgress({ done: 0, total: 0 });
     }
   };
 
@@ -89,20 +143,34 @@ const Documents = () => {
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept={SUPPORTED.join(',')}
               className="hidden"
-              onChange={e => { if (e.target.files?.[0]) pickFile(e.target.files[0]); }}
+              onChange={e => {
+                if (e.target.files) {
+                  pickFiles(Array.from(e.target.files));
+                }
+                e.currentTarget.value = '';
+              }}
             />
-            {file ? (
-              <div className="flex items-center justify-center gap-3">
-                <FileText className="text-brand-orange w-6 h-6 shrink-0" />
-                <span className="text-sm font-semibold text-brand-charcoal truncate max-w-[200px]">{file.name}</span>
-                <button
-                  onClick={e => { e.stopPropagation(); setFile(null); setUploadMsg(''); }}
-                  className="text-brand-grayBody hover:text-red-500 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            {files.length > 0 ? (
+              <div className="space-y-3 text-left max-h-52 overflow-y-auto pr-1">
+                <p className="text-xs font-bold text-brand-charcoal text-center">{files.length} file(s) selected</p>
+                {files.map(file => (
+                  <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between gap-3 bg-white border border-brand-border rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="text-brand-orange w-4 h-4 shrink-0" />
+                      <span className="text-xs font-semibold text-brand-charcoal truncate">{file.name}</span>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); removeFile(file); }}
+                      className="text-brand-grayBody hover:text-red-500 transition-colors"
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             ) : (
               <>
@@ -170,9 +238,11 @@ const Documents = () => {
           <button
             className="w-full bg-brand-charcoal text-white py-3.5 rounded-full font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-50"
             onClick={handleSubmit}
-            disabled={uploading || !file}
+            disabled={uploading || files.length === 0}
           >
-            {uploading ? 'Uploading & Ingesting…' : 'Upload & Ingest Document'}
+            {uploading
+              ? `Uploading ${uploadProgress.done}/${uploadProgress.total}...`
+              : `Upload & Ingest ${files.length > 1 ? `${files.length} Documents` : 'Document'}`}
           </button>
         </div>
 

@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 import uvicorn
 import os
 import httpx
@@ -610,6 +610,93 @@ async def upload_document(
         raise HTTPException(status_code=422, detail=result.get("reason"))
 
     return result
+
+
+@app.post("/upload-multiple")
+async def upload_documents_multiple(
+    files:    List[UploadFile] = File(...),
+    category: str              = Form("general"),
+    db_type:  str              = Form("public"),
+    token:    ClerkTokenPayload = Depends(get_current_user),
+):
+    """
+    Admin-only: upload multiple files directly from the browser in one request.
+    Each file is ingested independently and returns per-file status.
+    """
+    if token.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can upload documents.")
+    if db_type not in ("public", "private"):
+        raise HTTPException(status_code=400, detail="db_type must be 'public' or 'private'.")
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided.")
+
+    results = []
+    succeeded = 0
+    failed = 0
+
+    for file in files:
+        suffix = pathlib.Path(file.filename or "upload").suffix or ".bin"
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                shutil.copyfileobj(file.file, tmp)
+                tmp_path = tmp.name
+
+            result = assistant.ingest_document(
+                file_path         = tmp_path,
+                tenant_id         = token.tenant_id,
+                category          = category,
+                uploaded_by       = token.user_id,
+                db_type           = db_type,
+                original_filename = file.filename or "",
+            )
+
+            status = result.get("status", "ok")
+            if status in ("failed", "blocked"):
+                failed += 1
+                results.append(
+                    {
+                        "filename": file.filename or "unknown",
+                        "success": False,
+                        "status": status,
+                        "reason": result.get("reason", "Ingestion failed."),
+                    }
+                )
+            else:
+                succeeded += 1
+                results.append(
+                    {
+                        "filename": file.filename or "unknown",
+                        "success": True,
+                        "status": "ingested",
+                    }
+                )
+        except Exception as e:
+            failed += 1
+            results.append(
+                {
+                    "filename": file.filename or "unknown",
+                    "success": False,
+                    "status": "failed",
+                    "reason": str(e),
+                }
+            )
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            try:
+                file.file.close()
+            except Exception:
+                pass
+
+    return {
+        "summary": {
+            "total": len(files),
+            "succeeded": succeeded,
+            "failed": failed,
+        },
+        "results": results,
+    }
 
 
 @app.get("/documents")
