@@ -122,8 +122,29 @@ export function listUsers() {
   return request<{ tenant_id: string; users: Record<string, unknown>[] }>('/users');
 }
 
-export function getMetrics() {
-  return request<Record<string, unknown>>('/metrics');
+export interface MetricsResponse {
+  period_days: number;
+  query_count: number;
+  previous_query_count: number;
+  tool_invocations: number;
+  security_blocks: number;
+  hitl_requests: number;
+  avg_latency_ms: number;
+  total_tokens: number;
+  errors: number;
+  confidence_breakdown: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+  query_timeseries: {
+    labels: string[];
+    values: number[];
+  };
+}
+
+export function getMetrics(days: 7 | 30 = 7) {
+  return request<MetricsResponse>(`/metrics?days=${days}`);
 }
 
 // ── Email Config ──────────────────────────────────────────────────────────
