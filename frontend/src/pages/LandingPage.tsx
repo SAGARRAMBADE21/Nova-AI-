@@ -63,6 +63,7 @@ const LandingPage = () => {
       localStorage.setItem('nova_role',    result.role);
       localStorage.setItem('nova_company', result.company_name);
       navigate(result.role === 'admin' ? '/dashboard' : '/chat');
+      navigate(result.role === 'admin' ? '/dashboard' : '/chat');
     } catch (err) {
       setLoginError(err instanceof Error ? err.message : 'Login failed.');
     } finally {
@@ -386,6 +387,8 @@ const LandingPage = () => {
               </ul>
               <div className="flex flex-wrap gap-3">
                 <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Role-Based Access</span>
+                <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Scoped Retrieval</span>
+                <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Audit Trails</span>
                 <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Scoped Retrieval</span>
                 <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Audit Trails</span>
                 <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Human-in-the-Loop</span>

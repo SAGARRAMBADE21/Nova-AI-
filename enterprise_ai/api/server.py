@@ -36,6 +36,52 @@ from utils.email_sender import send_invite_email
 app       = FastAPI(title="Nova AI — Enterprise Assistant", version="2.0.0")
 assistant = EnterpriseAIAssistant()
 
+# ── Google OAuth config helpers ──────────────────────────────────────────
+
+GOOGLE_OAUTH_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/meetings.space.created",
+]
+
+
+def _resolve_google_path(env_key: str, filename: str) -> str:
+    """Resolve Google credential/token paths robustly across cwd and .env variants."""
+    workspace_root = pathlib.Path(__file__).resolve().parents[2]
+    enterprise_root = pathlib.Path(__file__).resolve().parents[1]
+
+    def _candidates(raw: str) -> list[pathlib.Path]:
+        p = pathlib.Path(raw)
+        if p.is_absolute():
+            return [p]
+        cleaned = raw.lstrip("./\\")
+        return [
+            workspace_root / p,
+            enterprise_root / p,
+            workspace_root / cleaned,
+            enterprise_root / cleaned,
+        ]
+
+    raw_env = os.getenv(env_key, "").strip()
+    if raw_env:
+        for candidate in _candidates(raw_env):
+            if candidate.exists() or candidate.parent.exists():
+                return str(candidate)
+
+    for default_rel in (
+        f"enterprise_ai/credentials/{filename}",
+        f"credentials/{filename}",
+    ):
+        for candidate in _candidates(default_rel):
+            if candidate.exists() or candidate.parent.exists():
+                return str(candidate)
+
+    return str(enterprise_root / "credentials" / filename)
+
 # ── Upload / Ingestion Limits & Validation ───────────────────────────────────
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))  # 20 MB default
 MAX_DOCS_PER_TENANT = int(os.getenv("MAX_DOCS_PER_TENANT", "1000"))

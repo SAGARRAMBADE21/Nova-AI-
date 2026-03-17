@@ -146,6 +146,7 @@ const Tools = () => {
   };
 
   const handleDisconnect = async () => {
+  const handleDisconnect = async () => {
     if (!confirm('Disconnect Google Workspace?')) return;
     alert('Delete Backend/credentials/google_token.json and restart the backend to disconnect.');
     setConnectLoading(true);
@@ -278,7 +279,9 @@ const Tools = () => {
               </button>
               <button
                 className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-500 py-2 px-4 rounded-full font-bold text-sm hover:bg-red-100 transition-all disabled:opacity-50"
+                className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-500 py-2 px-4 rounded-full font-bold text-sm hover:bg-red-100 transition-all disabled:opacity-50"
                 onClick={handleDisconnect}
+                disabled={connectLoading}
                 disabled={connectLoading}
               >
                 Disconnect

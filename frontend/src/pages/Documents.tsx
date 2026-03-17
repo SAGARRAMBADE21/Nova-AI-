@@ -14,6 +14,7 @@ const Documents = () => {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const [uploadMsg, setUploadMsg] = useState('');
   const [uploadOk, setUploadOk] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -81,6 +82,7 @@ const Documents = () => {
     }
     setUploading(true);
     setUploadProgress({ done: 0, total: files.length });
+    setUploadProgress({ done: 0, total: files.length });
     setUploadMsg('');
 
     const succeeded: string[] = [];
@@ -102,8 +104,12 @@ const Documents = () => {
       if (succeeded.length > 0) {
         fetchDocs();
       }
+      if (succeeded.length > 0) {
+        fetchDocs();
+      }
     } finally {
       setUploading(false);
+      setUploadProgress({ done: 0, total: 0 });
       setUploadProgress({ done: 0, total: 0 });
     }
   };
@@ -129,6 +135,7 @@ const Documents = () => {
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               multiple
               accept={SUPPORTED.join(',')}
               className="hidden"
