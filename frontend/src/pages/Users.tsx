@@ -54,7 +54,7 @@ const Users = () => {
     setEmailStatus('');
     try {
       const res = await inviteUser({ email: inviteEmail, role: inviteRole });
-      setInviteMsg(`✓ ${res.message}`);
+      setInviteMsg(`✓ ${res.message ?? 'Invite created successfully.'}`);
       // Show email delivery status separately
       if (res.invite_email === 'sent') {
         setEmailStatus('📧 Invite email sent successfully.');

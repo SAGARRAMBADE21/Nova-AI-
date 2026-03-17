@@ -451,6 +451,10 @@ async def invite_user(
     else:
         result["invite_email"] = "skipped (company not found)"
 
+    result["message"] = (
+        f"User {request.email} invited as {request.role}."
+    )
+
     return result
 
 
