@@ -223,7 +223,12 @@ class TenantManager:
         )
 
     def list_users(self, tenant_id: str) -> List[dict]:
-        return list(self.users.find({"tenant_id": tenant_id}, {"_id": 0}))
+        return list(
+            self.users.find(
+                {"tenant_id": tenant_id},
+                {"_id": 0, "password_hash": 0},
+            )
+        )
 
     def update_user_status(self, tenant_id: str, email: str,
                            status: str) -> bool:

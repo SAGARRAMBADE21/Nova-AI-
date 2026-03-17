@@ -54,10 +54,12 @@ const Users = () => {
     setEmailStatus('');
     try {
       const res = await inviteUser({ email: inviteEmail, role: inviteRole });
-      setInviteMsg(`✓ ${res.message}`);
+      setInviteMsg(`✓ ${res.message ?? 'Invite created successfully.'}`);
       // Show email delivery status separately
       if (res.invite_email === 'sent') {
         setEmailStatus('📧 Invite email sent successfully.');
+      } else if (res.invite_email?.startsWith('failed')) {
+        setEmailStatus('⚠️ Email delivery failed - check Gmail App Password in Email Settings.');
       } else if (res.invite_email?.startsWith('skipped')) {
         setEmailStatus('⚠️ Email not sent — Gmail not configured. Go to Email Settings to set it up.');
       } else {

@@ -24,9 +24,9 @@ const LandingPage = () => {
       icon: <svg className="w-4 h-4 text-[#FF5925]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
     },
     {
-      id: "lakera",
-      title: "3-Layer Lakera Guard",
-      desc: "Industry-standard security scans user inputs, retrieved docs, and AI outputs to prevent prompt injections.",
+      id: "security",
+      title: "Layered Security Controls",
+      desc: "RBAC, audit logging, and human review gates keep sensitive workflows scoped and accountable.",
       icon: <svg className="w-4 h-4 text-[#FF5925]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path></svg>
     },
     {
@@ -62,7 +62,7 @@ const LandingPage = () => {
       localStorage.setItem('nova_token',   result.token);
       localStorage.setItem('nova_role',    result.role);
       localStorage.setItem('nova_company', result.company_name);
-      navigate('/dashboard');
+      navigate(result.role === 'admin' ? '/dashboard' : '/chat');
     } catch (err) {
       setLoginError(err instanceof Error ? err.message : 'Login failed.');
     } finally {
@@ -369,25 +369,25 @@ const LandingPage = () => {
             <div className="lg:w-1/2">
               <span className="section-label">Security</span>
               <h2 className="text-4xl font-bold text-brand-charcoal mt-2 mb-8">Built security-first — not as an afterthought</h2>
-              <p className="text-lg text-brand-grayBody mb-8">QueryMind applies Lakera Guard at 3 checkpoints on every single request:</p>
+              <p className="text-lg text-brand-grayBody mb-8">QueryMind layers multiple controls across access, retrieval, and approval flows:</p>
               <ul className="space-y-4 mb-10">
                 <li className="flex items-start">
                   <span className="bg-green-100 p-1 rounded-full mr-3 mt-1"><svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3"></path></svg></span>
-                  <span className="text-brand-charcoal font-semibold">Input Scan — <span className="font-normal text-brand-grayBody">Every user message scanned before reaching the AI.</span></span>
+                  <span className="text-brand-charcoal font-semibold">Role-Based Access — <span className="font-normal text-brand-grayBody">Every request is scoped to the user&apos;s permission level.</span></span>
                 </li>
                 <li className="flex items-start">
                   <span className="bg-green-100 p-1 rounded-full mr-3 mt-1"><svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3"></path></svg></span>
-                  <span className="text-brand-charcoal font-semibold">Document Scan — <span className="font-normal text-brand-grayBody">Retrieved chunks checked before prompt injection.</span></span>
+                  <span className="text-brand-charcoal font-semibold">Audit Logging — <span className="font-normal text-brand-grayBody">Queries, tool calls, and escalations are captured for review.</span></span>
                 </li>
                 <li className="flex items-start">
                   <span className="bg-green-100 p-1 rounded-full mr-3 mt-1"><svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3"></path></svg></span>
-                  <span className="text-brand-charcoal font-semibold">Output Scan — <span className="font-normal text-brand-grayBody">Every AI response scanned before delivery.</span></span>
+                  <span className="text-brand-charcoal font-semibold">Human Review — <span className="font-normal text-brand-grayBody">High-risk actions are paused and escalated before execution.</span></span>
                 </li>
               </ul>
               <div className="flex flex-wrap gap-3">
                 <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Role-Based Access</span>
-                <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Prompt Injection Protection</span>
-                <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">PII Redaction</span>
+                <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Scoped Retrieval</span>
+                <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Audit Trails</span>
                 <span className="px-4 py-2 bg-brand-lightBg rounded-full text-xs font-bold text-brand-charcoal border border-brand-border">Human-in-the-Loop</span>
               </div>
             </div>
@@ -397,11 +397,11 @@ const LandingPage = () => {
                 <div className="flex flex-col items-center space-y-6 relative z-10 text-[10px] sm:text-xs font-bold tracking-widest uppercase">
                   <div className="bg-white/10 p-3 rounded-lg border border-white/20 w-full text-center">User Input</div>
                   <svg className="w-4 h-4 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11V5H9v2H7v2h2v2h2V9h2V7h-2z"></path></svg>
-                  <div className="bg-brand-orange text-white p-3 rounded-lg w-full text-center">Lakera Scan #1</div>
+                  <div className="bg-brand-orange text-white p-3 rounded-lg w-full text-center">RBAC Check</div>
                   <div className="bg-white/10 p-3 rounded-lg border border-white/20 w-full text-center">MongoDB RAG</div>
-                  <div className="bg-brand-orange text-white p-3 rounded-lg w-full text-center">Lakera Scan #2</div>
+                  <div className="bg-brand-orange text-white p-3 rounded-lg w-full text-center">Audit Log</div>
                   <div className="bg-white/10 p-3 rounded-lg border border-white/20 w-full text-center">GPT-4 Inference</div>
-                  <div className="bg-brand-orange text-white p-3 rounded-lg w-full text-center">Lakera Scan #3</div>
+                  <div className="bg-brand-orange text-white p-3 rounded-lg w-full text-center">HITL Gate</div>
                   <div className="bg-green-500 text-white p-3 rounded-lg w-full text-center shadow-lg shadow-green-500/20">ARIA Response</div>
                 </div>
               </div>

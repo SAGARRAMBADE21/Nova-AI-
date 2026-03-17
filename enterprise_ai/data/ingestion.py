@@ -2,10 +2,9 @@
 data/ingestion.py
 Real-Time Admin Data Ingestion (24/7) — Multi-tenant aware.
 Supports: PDF, DOCX, XLSX, CSV, TXT, JSON, XML, URLs
-Pipeline: Upload → Lakera Scan → Parse → Chunk → Embed (MongoDB Atlas) → Graph Update
+Pipeline: Upload → Parse → Chunk → Embed (MongoDB Atlas) → Graph Update
 """
 
-import os
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -28,7 +27,7 @@ class DataIngestionPipeline:
     }
 
     def __init__(self, public_store, private_store,
-                 knowledge_graph, lakera_guard=None):
+                 knowledge_graph):
         """
         public_store  → nova_ai database           (db_type='public')
         private_store → nova_ai_confidential db    (db_type='private')
@@ -36,7 +35,6 @@ class DataIngestionPipeline:
         self.public_store    = public_store
         self.private_store   = private_store
         self.knowledge_graph = knowledge_graph
-        self.lakera          = lakera_guard
 
     # ── Main entry point ─────────────────────────────────────────────────
 
@@ -75,26 +73,10 @@ class DataIngestionPipeline:
                 "file":   path.name,
             }
 
-        # 2. Lakera Guard scan
-        if self.lakera:
-            result = self.lakera.scan_document(
-                content[:2000], source_name, "admin", "ingestion"
-            )
-            if result.flagged:
-                logger.warning(
-                    f"[Ingestion] Lakera blocked | file={source_name} "
-                    f"| threat={result.threat.value}"
-                )
-                return {
-                    "status": "blocked",
-                    "reason": result.message,
-                    "file":   source_name,
-                }
-
-        # 3. Chunk
+        # 2. Chunk
         chunks = self._chunk(content)
 
-        # 4. Route to correct physical database based on db_type
+        # 3. Route to correct physical database based on db_type
         store = self.public_store if db_type == "public" else self.private_store
         db_label = "nova_ai" if db_type == "public" else "nova_ai_confidential"
         logger.info(
@@ -110,7 +92,7 @@ class DataIngestionPipeline:
                 db_type   = db_type,
             )
 
-        # 5. Update knowledge graph
+        # 4. Update knowledge graph
         self.knowledge_graph.update_from_document(content, source_name)
 
         report = {

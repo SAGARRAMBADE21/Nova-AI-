@@ -16,7 +16,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -35,6 +35,52 @@ from utils.email_sender import send_invite_email
 
 app       = FastAPI(title="Nova AI — Enterprise Assistant", version="2.0.0")
 assistant = EnterpriseAIAssistant()
+
+# ── Google OAuth config helpers ──────────────────────────────────────────
+
+GOOGLE_OAUTH_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/meetings.space.created",
+]
+
+
+def _resolve_google_path(env_key: str, filename: str) -> str:
+    """Resolve Google credential/token paths robustly across cwd and .env variants."""
+    workspace_root = pathlib.Path(__file__).resolve().parents[2]
+    enterprise_root = pathlib.Path(__file__).resolve().parents[1]
+
+    def _candidates(raw: str) -> list[pathlib.Path]:
+        p = pathlib.Path(raw)
+        if p.is_absolute():
+            return [p]
+        cleaned = raw.lstrip("./\\")
+        return [
+            workspace_root / p,
+            enterprise_root / p,
+            workspace_root / cleaned,
+            enterprise_root / cleaned,
+        ]
+
+    raw_env = os.getenv(env_key, "").strip()
+    if raw_env:
+        for candidate in _candidates(raw_env):
+            if candidate.exists() or candidate.parent.exists():
+                return str(candidate)
+
+    for default_rel in (
+        f"enterprise_ai/credentials/{filename}",
+        f"credentials/{filename}",
+    ):
+        for candidate in _candidates(default_rel):
+            if candidate.exists() or candidate.parent.exists():
+                return str(candidate)
+
+    return str(enterprise_root / "credentials" / filename)
 
 # ── CORS — allow Vite dev server ──────────────────────────────────────────
 app.add_middleware(
@@ -389,6 +435,9 @@ async def invite_user(
     company    = assistant.tenant_manager.get_company_by_tenant_id(token.tenant_id)
     email_cfg  = assistant.tenant_manager.get_email_config(token.tenant_id)
     if company:
+        has_tenant_email_config = bool((email_cfg or {}).get("sender_email")) and bool((email_cfg or {}).get("sender_password"))
+        has_fallback_email_config = bool(os.getenv("EMAIL_USER", "").strip()) and bool(os.getenv("EMAIL_PASSWORD", "").strip())
+        has_any_email_config = has_tenant_email_config or has_fallback_email_config
         email_sent = send_invite_email(
             to_email        = request.email,
             company_name    = company["company_name"],
@@ -399,11 +448,20 @@ async def invite_user(
             sender_password = (email_cfg or {}).get("sender_password", ""),
         )
         result["invite_email"] = (
-            "sent" if email_sent
-            else "skipped — configure Gmail via POST /email-config"
+            "sent"
+            if email_sent
+            else (
+                "failed - check Gmail App Password or SMTP access"
+                if has_any_email_config
+                else "skipped - configure Gmail via POST /email-config"
+            )
         )
     else:
         result["invite_email"] = "skipped (company not found)"
+
+    result["message"] = (
+        f"User {request.email} invited as {request.role}."
+    )
 
     return result
 
@@ -502,10 +560,11 @@ async def test_email(
 
 @app.get("/metrics")
 async def metrics(
+    days: int = Query(7, ge=1, le=30),
     token: ClerkTokenPayload = Depends(get_current_user),
 ):
     """LLMOps metrics — scoped to the authenticated tenant."""
-    return assistant.get_metrics()
+    return assistant.get_metrics(days=days, tenant_id=token.tenant_id)
 
 
 @app.post("/upload")
@@ -590,8 +649,7 @@ async def tools_connection_status(
     token: ClerkTokenPayload = Depends(get_current_user),
 ):
     """Check if Google Workspace is connected (token file exists and is valid)."""
-    import os
-    token_file = os.getenv("GOOGLE_TOKEN_FILE", "./credentials/google_token.json")
+    token_file = _resolve_google_path("GOOGLE_TOKEN_FILE", "google_token.json")
     connected  = os.path.exists(token_file)
     detail     = "Connected" if connected else "Not connected"
     return {"connected": connected, "detail": detail, "token_file": token_file}
@@ -612,7 +670,7 @@ async def connect_google(
     import json
     from google_auth_oauthlib.flow import Flow
 
-    creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "./enterprise_ai/credentials/google_credentials.json")
+    creds_file = _resolve_google_path("GOOGLE_CREDENTIALS_FILE", "google_credentials.json")
     if not os.path.exists(creds_file):
         raise HTTPException(
             status_code=400,
@@ -628,16 +686,6 @@ async def connect_google(
         cred_data = json.load(f)
     cred_type = "installed" if "installed" in cred_data else "web"
 
-    SCOPES = [
-        "https://www.googleapis.com/auth/gmail.modify",
-        "https://mail.google.com/",
-        "https://www.googleapis.com/auth/drive",
-        "https://www.googleapis.com/auth/documents",
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/calendar",
-        "https://www.googleapis.com/auth/meetings.space.created",
-    ]
-
     # For installed apps, we use the loopback redirect
     REDIRECT_URI = (
         "http://localhost:8000/tools/callback/google"
@@ -646,7 +694,11 @@ async def connect_google(
     )
 
     try:
-        flow = Flow.from_client_secrets_file(creds_file, scopes=SCOPES, redirect_uri=REDIRECT_URI)
+        flow = Flow.from_client_secrets_file(
+            creds_file,
+            scopes=GOOGLE_OAUTH_SCOPES,
+            redirect_uri=REDIRECT_URI,
+        )
         auth_url, _ = flow.authorization_url(
             prompt="consent",
             access_type="offline",
@@ -661,6 +713,8 @@ async def connect_google(
 async def google_oauth_callback(
     code: str,
     state: Optional[str] = None,
+    error: Optional[str] = None,
+    error_description: Optional[str] = None,
 ):
     """
     OAuth callback — exchanges the code for tokens and saves them.
@@ -669,23 +723,23 @@ async def google_oauth_callback(
     import os, json
     from google_auth_oauthlib.flow import Flow
 
-    creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "./credentials/google_credentials.json")
-    token_file = os.getenv("GOOGLE_TOKEN_FILE", "./credentials/google_token.json")
+    creds_file = _resolve_google_path("GOOGLE_CREDENTIALS_FILE", "google_credentials.json")
+    token_file = _resolve_google_path("GOOGLE_TOKEN_FILE", "google_token.json")
     REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8000/tools/callback/google")
 
-    SCOPES = [
-        "https://www.googleapis.com/auth/gmail.modify",
-        "https://www.googleapis.com/auth/drive",
-        "https://www.googleapis.com/auth/documents",
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/calendar",
-    ]
+    if error:
+        msg = error_description or error
+        raise HTTPException(status_code=400, detail=f"OAuth denied: {msg}")
 
     if not os.path.exists(creds_file):
-        raise HTTPException(status_code=400, detail="credentials/google_credentials.json not found.")
+        raise HTTPException(status_code=400, detail=f"Google credentials file not found at: {creds_file}")
 
     try:
-        flow = Flow.from_client_secrets_file(creds_file, scopes=SCOPES, redirect_uri=REDIRECT_URI)
+        flow = Flow.from_client_secrets_file(
+            creds_file,
+            scopes=GOOGLE_OAUTH_SCOPES,
+            redirect_uri=REDIRECT_URI,
+        )
         flow.fetch_token(code=code)
         creds = flow.credentials
 
@@ -716,6 +770,32 @@ async def google_oauth_callback(
     except Exception as e:
         logger.error(f"[GoogleOAuth] Callback error: {e}")
         raise HTTPException(status_code=400, detail=f"OAuth failed: {e}")
+
+
+@app.post("/tools/disconnect/google")
+async def disconnect_google(
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """Admin-only: disconnect Google Workspace by removing saved token file."""
+    if token.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can disconnect Google Workspace.")
+
+    token_file = _resolve_google_path("GOOGLE_TOKEN_FILE", "google_token.json")
+    removed = False
+    try:
+        if os.path.exists(token_file):
+            os.remove(token_file)
+            removed = True
+
+        assistant.plugins._register_all()
+        return {
+            "disconnected": True,
+            "removed": removed,
+            "token_file": token_file,
+            "message": "Google Workspace disconnected.",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to disconnect Google Workspace: {e}")
 
 
 class ToolExecuteRequest(BaseModel):

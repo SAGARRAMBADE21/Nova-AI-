@@ -105,11 +105,23 @@ const inlineMarkdown = (text: string): React.ReactNode => {
   });
 };
 
+// ── Storage keys ─────────────────────────────────────────────────────────
+
+const STORAGE_SESSIONS_KEY   = 'nova_chat_sessions';
+const STORAGE_ACTIVE_KEY     = 'nova_chat_active_session';
+
 // ── Component ────────────────────────────────────────────────────────────
 
 const Chat = () => {
-  const [sessions, setSessions]         = useState<Session[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<Session[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_SESSIONS_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
+    return localStorage.getItem(STORAGE_ACTIVE_KEY) ?? null;
+  });
   const [input, setInput]               = useState('');
   const [isConfidential, setIsConfidential] = useState(false);
 
@@ -146,6 +158,17 @@ const Chat = () => {
     check();
   }, [getHeaders]);
 
+  // ── Persist sessions to localStorage ────────────────────────────────────
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_SESSIONS_KEY, JSON.stringify(sessions)); }
+    catch { /* quota exceeded — silently ignore */ }
+  }, [sessions]);
+
+  useEffect(() => {
+    if (activeSessionId) localStorage.setItem(STORAGE_ACTIVE_KEY, activeSessionId);
+    else localStorage.removeItem(STORAGE_ACTIVE_KEY);
+  }, [activeSessionId]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -161,7 +184,7 @@ const Chat = () => {
   };
 
   const handleLogout = () => {
-    ['nova_token','nova_role','nova_company','nova_email'].forEach(k => localStorage.removeItem(k));
+    ['nova_token','nova_role','nova_company','nova_email', STORAGE_SESSIONS_KEY, STORAGE_ACTIVE_KEY].forEach(k => localStorage.removeItem(k));
     navigate('/login');
   };
 
@@ -381,9 +404,11 @@ const Chat = () => {
             </div>
           </div>
           <div className="flex gap-1">
-            <button className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-medium text-brand-charcoal hover:text-brand-orange transition-colors py-1.5 rounded-lg hover:bg-white" onClick={() => navigate('/dashboard')}>
-              <Settings size={13} /> Dashboard
-            </button>
+            {userRole === 'admin' && (
+              <button className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-medium text-brand-charcoal hover:text-brand-orange transition-colors py-1.5 rounded-lg hover:bg-white" onClick={() => navigate('/dashboard')}>
+                <Settings size={13} /> Dashboard
+              </button>
+            )}
             <button className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-medium text-red-500 hover:text-red-600 transition-colors py-1.5 rounded-lg hover:bg-red-50" onClick={handleLogout}>
               <LogOut size={13} /> Sign Out
             </button>
