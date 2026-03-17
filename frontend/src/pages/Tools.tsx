@@ -145,9 +145,24 @@ const Tools = () => {
     finally     { setConnectLoading(false); }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
     if (!confirm('Disconnect Google Workspace?')) return;
     alert('Delete Backend/credentials/google_token.json and restart the backend to disconnect.');
+    setConnectLoading(true);
+    try {
+      const res = await fetch(`${BASE}/tools/disconnect/google`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail ?? 'Failed to disconnect');
+      await checkConnectionStatus();
+      alert('Google Workspace disconnected.');
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to disconnect');
+    } finally {
+      setConnectLoading(false);
+    }
   };
 
   const checkHealth = async () => {
@@ -262,8 +277,9 @@ const Tools = () => {
                 <RefreshCw size={13} /> Refresh
               </button>
               <button
-                className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-500 py-2 px-4 rounded-full font-bold text-sm hover:bg-red-100 transition-all"
+                className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-500 py-2 px-4 rounded-full font-bold text-sm hover:bg-red-100 transition-all disabled:opacity-50"
                 onClick={handleDisconnect}
+                disabled={connectLoading}
               >
                 Disconnect
               </button>

@@ -122,8 +122,29 @@ export function listUsers() {
   return request<{ tenant_id: string; users: Record<string, unknown>[] }>('/users');
 }
 
-export function getMetrics() {
-  return request<Record<string, unknown>>('/metrics');
+export interface MetricsResponse {
+  period_days: number;
+  query_count: number;
+  previous_query_count: number;
+  tool_invocations: number;
+  security_blocks: number;
+  hitl_requests: number;
+  avg_latency_ms: number;
+  total_tokens: number;
+  errors: number;
+  confidence_breakdown: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+  query_timeseries: {
+    labels: string[];
+    values: number[];
+  };
+}
+
+export function getMetrics(days: 7 | 30 = 7) {
+  return request<MetricsResponse>(`/metrics?days=${days}`);
 }
 
 // ── Email Config ──────────────────────────────────────────────────────────
@@ -167,6 +188,42 @@ export async function uploadDocument(file: File, category: string, dbType: strin
     throw new Error(error.detail ?? `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+export interface UploadMultipleResponse {
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+  results: Array<{
+    filename: string;
+    success: boolean;
+    status: string;
+    reason?: string;
+  }>;
+}
+
+export async function uploadDocuments(files: File[], category: string, dbType: string) {
+  const token = getToken();
+  const form = new FormData();
+  for (const file of files) {
+    form.append('files', file);
+  }
+  form.append('category', category);
+  form.append('db_type', dbType);
+
+  const res = await fetch(`${BASE_URL}/upload-multiple`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<UploadMultipleResponse>;
 }
 
 export function listDocuments() {

@@ -8,10 +8,12 @@ const MAX_FILES = 10;
 
 const Documents = () => {
   const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [category, setCategory] = useState('');
   const [dbType, setDbType] = useState<'public' | 'private'>('public');
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const [uploadMsg, setUploadMsg] = useState('');
   const [uploadOk, setUploadOk] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -78,7 +80,12 @@ const Documents = () => {
       return;
     }
     setUploading(true);
+    setUploadProgress({ done: 0, total: files.length });
     setUploadMsg('');
+
+    const succeeded: string[] = [];
+    const failed: string[] = [];
+
     try {
       for (const f of files) {
         // Upload sequentially to keep backend load predictable
@@ -92,12 +99,12 @@ const Documents = () => {
       setFiles([]);
       setCategory('');
       setDbType('public');
-      fetchDocs();
-    } catch (err) {
-      setUploadMsg(`✕ ${err instanceof Error ? err.message : 'Upload failed.'}`);
-      setUploadOk(false);
+      if (succeeded.length > 0) {
+        fetchDocs();
+      }
     } finally {
       setUploading(false);
+      setUploadProgress({ done: 0, total: 0 });
     }
   };
 
@@ -122,6 +129,7 @@ const Documents = () => {
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept={SUPPORTED.join(',')}
               className="hidden"
               multiple

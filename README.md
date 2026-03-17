@@ -57,7 +57,7 @@ Unlike generic AI tools, Nova AI **never mixes data between companies** and **ph
  │                                                              │
  │  Employee asks a question                                    │
  │  └── 5-Agent pipeline runs                                   │
- │      ├── Security   → RBAC, Lakera Guard                     │
+ │      ├── Security   → RBAC, policy checks                    │
  │      ├── Retrieval  → MongoDB Vector Search (scoped)         │
  │      ├── Validation → Confidence score, HITL trigger         │
  │      ├── Tools      → Google Workspace plugins               │
@@ -77,7 +77,7 @@ Unlike generic AI tools, Nova AI **never mixes data between companies** and **ph
 | Database | MongoDB Atlas |
 | Auth | Nova JWT (HS256) — join code + email + password |
 | API | FastAPI + Uvicorn |
-| Security | Lakera Guard (prompt injection, PII, jailbreak) |
+| Security | RBAC, audit logging, HITL escalation |
 | Graph RAG | NetworkX (entity-relationship reasoning) |
 | HITL | Custom human-in-the-loop escalation |
 | Email | SMTP — invite emails from admin's own Gmail |
@@ -183,6 +183,18 @@ Apply this to `knowledge_vectors` in **both** `nova_ai` and `nova_ai_confidentia
 > Index name must be exactly: `vector_index`
 
 ### 4 — Run
+
+If you want to run backend and frontend together with one command (Windows), run this from the repository root:
+
+```bash
+npm --prefix frontend run dev:full
+```
+
+This starts:
+- Backend API on `http://localhost:8000`
+- Frontend on `http://localhost:5173`
+
+If you only want backend:
 
 ```bash
 python api/server.py
@@ -302,8 +314,7 @@ Backend/
 ├── security/
 │   ├── nova_jwt.py            Employee JWT (HS256)
 │   ├── clerk_auth.py          Clerk JWT (developer-only)
-│   ├── rbac.py                Role → DB scope mapping
-│   └── lakera_guard.py        Prompt injection · PII protection
+│   └── rbac.py                Role → DB scope mapping
 │
 ├── core/
 │   ├── rag.py                 SelfCorrectingRAG (dual-DB aware)
@@ -350,7 +361,6 @@ Backend/
 | `CLERK_PUBLISHABLE_KEY` | dev | Clerk (developer use only) |
 | `CLERK_SECRET_KEY` | dev | Clerk (developer use only) |
 | `CLERK_JWKS_URL` | dev | Clerk JWKS URL |
-| `LAKERA_API_KEY` | optional | Lakera Guard API key |
 | `LOG_LEVEL` | optional | Logging level (default: `INFO`) |
 | `DEV_TENANT_ID` | dev | Mock tenant for local testing |
 

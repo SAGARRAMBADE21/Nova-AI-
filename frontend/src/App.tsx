@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -13,6 +13,31 @@ const Documents = lazy(() => import('./pages/Documents'));
 const EmailSettings = lazy(() => import('./pages/EmailSettings'));
 const Metrics = lazy(() => import('./pages/Metrics'));
 const Tools = lazy(() => import('./pages/Tools'));
+
+function isAuthenticated(): boolean {
+  return Boolean(localStorage.getItem('nova_token'));
+}
+
+function currentRole(): string {
+  return (localStorage.getItem('nova_role') ?? '').toLowerCase();
+}
+
+function RequireAuth({ children }: { children: ReactNode }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+function RequireAdmin({ children }: { children: ReactNode }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  if (currentRole() !== 'admin') {
+    return <Navigate to="/chat" replace />;
+  }
+  return children;
+}
 
 function RouteFallback() {
   return (
@@ -31,10 +56,10 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/onboard" element={<Onboarding />} />
-          <Route path="/chat" element={<Chat />} />
+          <Route path="/chat" element={<RequireAuth><Chat /></RequireAuth>} />
 
           {/* Dashboard Routes wrapped in Layout */}
-          <Route path="/dashboard" element={<Layout />}>
+          <Route path="/dashboard" element={<RequireAdmin><Layout /></RequireAdmin>}>
             <Route index element={<Navigate to="/dashboard/overview" replace />} />
             <Route path="overview" element={<Overview />} />
             <Route path="users" element={<Users />} />
