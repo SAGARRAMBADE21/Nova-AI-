@@ -250,30 +250,26 @@ const LandingPage = () => {
               <span>Introducing: QueryMind Agent</span>
               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </div>
-            
             {/* Massive Heading */}
-            <h1 className="text-[56px] md:text-[72px] font-medium text-[#1A1A1A] leading-[1.05] tracking-tight mb-6">
-              The AI-native<br />
-              documentation platform
+            <h1 className="text-[40px] md:text-[56px] font-medium text-[#1A1A1A] leading-[1.05] tracking-tight mb-6">
+              QueryMind – Ask, Retrieve,<br />
+              Answer Instantly.
             </h1>
             
             {/* Subheading */}
             <p className="text-[20px] text-[#555555] mb-10 leading-relaxed font-normal max-w-2xl">
-              Transform your documentation into a connected knowledge system —<br />
-              one that learns, optimizes, and improves itself intelligently
+              Turn your company’s documents into a secure, role‑aware AI assistant that delivers<br />
+              precise answers from your own knowledge — not the public web.
             </p>
             
-            {/* Buttons */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+            {/* Button */}
+            <div className="flex items-start sm:items-center">
               <button 
                 className="bg-[#1A1A1A] text-white px-6 py-3.5 rounded-full font-medium hover:bg-black transition-all flex items-center justify-between group min-w-[160px]"
                 onClick={() => navigate('/onboard')}
               >
-                Start for free
+                Get started
                 <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              <button className="bg-[#F3F4F6] text-[#1A1A1A] px-6 py-3.5 rounded-full font-medium hover:bg-[#E5E7EB] transition-all">
-                Talk to us
               </button>
             </div>
           </div>
@@ -397,9 +393,8 @@ const LandingPage = () => {
             <div className="lg:w-1/2 w-full">
               <div className="bg-brand-charcoal p-10 rounded-card text-white relative">
                 <div className="absolute inset-0 ribbon-decoration opacity-10"></div>
-                <div className="flex flex-col items-center space-y-6 relative z-10 text-[10px] sm:text-xs font-bold tracking-widest uppercase">
+                <div className="flex flex-col items-center space-y-3 relative z-10 text-[10px] sm:text-xs font-bold tracking-widest uppercase">
                   <div className="bg-white/10 p-3 rounded-lg border border-white/20 w-full text-center">User Input</div>
-                  <svg className="w-4 h-4 text-brand-orange" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11V5H9v2H7v2h2v2h2V9h2V7h-2z"></path></svg>
                   <div className="bg-brand-orange text-white p-3 rounded-lg w-full text-center">Auth &amp; role checks</div>
                   <div className="bg-white/10 p-3 rounded-lg border border-white/20 w-full text-center">MongoDB RAG</div>
                   <div className="bg-brand-orange text-white p-3 rounded-lg w-full text-center">Document access filters</div>

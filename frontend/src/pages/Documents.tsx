@@ -8,12 +8,10 @@ const MAX_FILES = 10;
 
 const Documents = () => {
   const [files, setFiles] = useState<File[]>([]);
-  const [files, setFiles] = useState<File[]>([]);
   const [category, setCategory] = useState('');
   const [dbType, setDbType] = useState<'public' | 'private'>('public');
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const [uploadMsg, setUploadMsg] = useState('');
   const [uploadOk, setUploadOk] = useState(false);
@@ -82,7 +80,6 @@ const Documents = () => {
     }
     setUploading(true);
     setUploadProgress({ done: 0, total: files.length });
-    setUploadProgress({ done: 0, total: files.length });
     setUploadMsg('');
 
     const succeeded: string[] = [];
@@ -136,10 +133,8 @@ const Documents = () => {
               ref={fileInputRef}
               type="file"
               multiple
-              multiple
               accept={SUPPORTED.join(',')}
               className="hidden"
-              multiple
               // Allow folder selection in supporting browsers
               // eslint-disable-next-line @typescript-eslint/ban-ts-comment
               // @ts-expect-error - webkitdirectory is not in the standard input props
@@ -171,7 +166,8 @@ const Documents = () => {
                   </div>
                 ))}
                 <p className="text-[11px] text-brand-grayBody mt-1">
-                  {files.length} selected (max {MAX_FILES}). Drag in or select a folder to add more.
+                  {files.length} selected (max {MAX_FILES}). Drag in or select a folder to add more.<br />
+                  Max 20&nbsp;MB per file, up to 1000 documents per workspace.
                 </p>
               </div>
             ) : (
@@ -182,7 +178,9 @@ const Documents = () => {
                 <h4 className="text-brand-charcoal font-bold">Upload Documents</h4>
                 <p className="text-sm text-brand-grayBody mt-2 leading-relaxed">
                   Drag &amp; drop files or folders here, or click to browse.<br />
-                  <span className="text-xs font-semibold">PDF, DOCX, XLSX, CSV, TXT, JSON, XML, MD, JPG, JPEG</span>
+                  <span className="text-xs font-semibold">
+                    Max 20&nbsp;MB per file. Allowed types: PDF, DOCX, XLSX, CSV, TXT, JSON, XML, MD, JPG, JPEG.
+                  </span>
                 </p>
               </>
             )}
