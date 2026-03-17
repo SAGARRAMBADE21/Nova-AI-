@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { FileText, ShieldCheck, UploadCloud, X } from 'lucide-react';
 import { uploadDocument, listDocuments, type Document } from '@/lib/api';
 
-const SUPPORTED = ['.pdf', '.docx', '.xlsx', '.csv', '.txt', '.json', '.xml', '.md'];
+const SUPPORTED = ['.pdf', '.docx', '.xlsx', '.csv', '.txt', '.json', '.xml', '.md', '.jpg', '.jpeg'];
+
+const MAX_FILES = 10;
 
 const Documents = () => {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [category, setCategory] = useState('');
   const [dbType, setDbType] = useState<'public' | 'private'>('public');
   const [dragging, setDragging] = useState(false);
@@ -30,33 +32,64 @@ const Documents = () => {
 
   useEffect(() => { fetchDocs(); }, []);
 
-  const pickFile = (f: File) => {
-    const ext = '.' + f.name.split('.').pop()?.toLowerCase();
-    if (!SUPPORTED.includes(ext)) {
-      setUploadMsg(`✕ Unsupported file type. Allowed: ${SUPPORTED.join(', ')}`);
-      setUploadOk(false);
-      return;
+  const pickFiles = (incoming: FileList | File[]) => {
+    const next: File[] = [];
+    const rejected: string[] = [];
+
+    for (const f of Array.from(incoming)) {
+      if (next.length + files.length >= MAX_FILES) break;
+      const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+      if (!SUPPORTED.includes(ext)) {
+        rejected.push(f.name);
+        continue;
+      }
+      next.push(f);
     }
-    setFile(f);
-    setUploadMsg('');
+
+    if (rejected.length) {
+      setUploadMsg(
+        `✕ Unsupported file type for: ${rejected.join(', ')}. Allowed: ${SUPPORTED.join(', ')}`
+      );
+      setUploadOk(false);
+    } else {
+      setUploadMsg('');
+    }
+
+    if (next.length) {
+      setFiles(prev => {
+        const merged = [...prev, ...next];
+        return merged.slice(0, MAX_FILES);
+      });
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) pickFile(f);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      pickFiles(e.dataTransfer.files);
+    }
   };
 
   const handleSubmit = async () => {
-    if (!file) { setUploadMsg('✕ Please select a file first.'); setUploadOk(false); return; }
+    if (!files.length) {
+      setUploadMsg('✕ Please select at least one file (up to 10).');
+      setUploadOk(false);
+      return;
+    }
     setUploading(true);
     setUploadMsg('');
     try {
-      await uploadDocument(file, category || 'general', dbType);
-      setUploadMsg('✓ Document uploaded and ingested successfully.');
+      for (const f of files) {
+        // Upload sequentially to keep backend load predictable
+        // eslint-disable-next-line no-await-in-loop
+        await uploadDocument(f, category || 'general', dbType);
+      }
+      setUploadMsg(
+        `✓ ${files.length} document${files.length > 1 ? 's' : ''} uploaded and ingested successfully.`
+      );
       setUploadOk(true);
-      setFile(null);
+      setFiles([]);
       setCategory('');
       setDbType('public');
       fetchDocs();
@@ -91,28 +124,50 @@ const Documents = () => {
               type="file"
               accept={SUPPORTED.join(',')}
               className="hidden"
-              onChange={e => { if (e.target.files?.[0]) pickFile(e.target.files[0]); }}
+              multiple
+              // Allow folder selection in supporting browsers
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-expect-error - webkitdirectory is not in the standard input props
+              webkitdirectory="true"
+              onChange={e => {
+                if (e.target.files && e.target.files.length > 0) {
+                  pickFiles(e.target.files);
+                }
+              }}
             />
-            {file ? (
-              <div className="flex items-center justify-center gap-3">
-                <FileText className="text-brand-orange w-6 h-6 shrink-0" />
-                <span className="text-sm font-semibold text-brand-charcoal truncate max-w-[200px]">{file.name}</span>
-                <button
-                  onClick={e => { e.stopPropagation(); setFile(null); setUploadMsg(''); }}
-                  className="text-brand-grayBody hover:text-red-500 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            {files.length ? (
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {files.map((f, idx) => (
+                  <div key={`${f.name}-${idx}`} className="flex items-center justify-center gap-3">
+                    <FileText className="text-brand-orange w-5 h-5 shrink-0" />
+                    <span className="text-xs font-semibold text-brand-charcoal truncate max-w-[200px]">
+                      {f.webkitRelativePath || f.name}
+                    </span>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setFiles(prev => prev.filter((_, i) => i !== idx));
+                        setUploadMsg('');
+                      }}
+                      className="text-brand-grayBody hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <p className="text-[11px] text-brand-grayBody mt-1">
+                  {files.length} selected (max {MAX_FILES}). Drag in or select a folder to add more.
+                </p>
               </div>
             ) : (
               <>
                 <div className="bg-brand-lightBg w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                   <UploadCloud className="text-brand-orange w-8 h-8" />
                 </div>
-                <h4 className="text-brand-charcoal font-bold">Upload Document</h4>
+                <h4 className="text-brand-charcoal font-bold">Upload Documents</h4>
                 <p className="text-sm text-brand-grayBody mt-2 leading-relaxed">
-                  Drag &amp; drop files here, or click to browse.<br />
-                  <span className="text-xs font-semibold">PDF, DOCX, XLSX, CSV, TXT, JSON, XML, MD</span>
+                  Drag &amp; drop files or folders here, or click to browse.<br />
+                  <span className="text-xs font-semibold">PDF, DOCX, XLSX, CSV, TXT, JSON, XML, MD, JPG, JPEG</span>
                 </p>
               </>
             )}
@@ -170,9 +225,9 @@ const Documents = () => {
           <button
             className="w-full bg-brand-charcoal text-white py-3.5 rounded-full font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-50"
             onClick={handleSubmit}
-            disabled={uploading || !file}
+            disabled={uploading || !files.length}
           >
-            {uploading ? 'Uploading & Ingesting…' : 'Upload & Ingest Document'}
+            {uploading ? 'Uploading & Ingesting…' : 'Upload & Ingest Documents'}
           </button>
         </div>
 

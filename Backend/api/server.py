@@ -36,6 +36,22 @@ from utils.email_sender import send_invite_email
 app       = FastAPI(title="Nova AI — Enterprise Assistant", version="2.0.0")
 assistant = EnterpriseAIAssistant()
 
+# ── Upload / Ingestion Limits & Validation ───────────────────────────────────
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))  # 20 MB default
+MAX_DOCS_PER_TENANT = int(os.getenv("MAX_DOCS_PER_TENANT", "1000"))
+ALLOWED_UPLOAD_EXTENSIONS = {
+    ".pdf",
+    ".docx",
+    ".xlsx",
+    ".csv",
+    ".txt",
+    ".json",
+    ".xml",
+    ".md",
+    ".jpg",
+    ".jpeg",
+}
+
 # ── CORS — allow Vite dev server ──────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
@@ -517,7 +533,8 @@ async def upload_document(
 ):
     """
     Admin-only: upload a file directly from the browser.
-    Saves to a temp file, runs the ingestion pipeline, then deletes the temp file.
+    Applies server-side validation for file type, size, and per-tenant limits,
+    then saves to a temp file, runs the ingestion pipeline, and deletes the temp file.
     """
     if token.role != "admin":
         raise HTTPException(status_code=403,
@@ -526,7 +543,44 @@ async def upload_document(
         raise HTTPException(status_code=400,
                             detail="db_type must be 'public' or 'private'.")
 
-    suffix   = pathlib.Path(file.filename or "upload").suffix or ".bin"
+    # ── Validate file extension ──────────────────────────────────────────────
+    filename = file.filename or "upload"
+    suffix   = pathlib.Path(filename).suffix.lower() or ".bin"
+    if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_UPLOAD_EXTENSIONS))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{suffix}'. Allowed types: {allowed}",
+        )
+
+    # ── Validate file size ───────────────────────────────────────────────────
+    try:
+        file.file.seek(0, os.SEEK_END)
+        size_bytes = file.file.tell()
+        file.file.seek(0)
+    except Exception:
+        size_bytes = 0
+
+    if size_bytes and size_bytes > MAX_UPLOAD_BYTES:
+        max_mb = round(MAX_UPLOAD_BYTES / (1024 * 1024))
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is {max_mb} MB.",
+        )
+
+    # ── Per-tenant document count limit ──────────────────────────────────────
+    existing_docs = assistant.list_documents(token.tenant_id)
+    if len(existing_docs) >= MAX_DOCS_PER_TENANT:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Document limit reached for this workspace. "
+                "Please archive or delete older documents before uploading more."
+            ),
+        )
+
+    # Use validated suffix (falls back to .bin only if none)
+    suffix   = suffix or ".bin"
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -612,14 +666,14 @@ async def connect_google(
     import json
     from google_auth_oauthlib.flow import Flow
 
-    creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "./enterprise_ai/credentials/google_credentials.json")
+    creds_file = os.getenv("GOOGLE_CREDENTIALS_FILE", "./Backend/credentials/google_credentials.json")
     if not os.path.exists(creds_file):
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Google credentials file not found at: {creds_file}. "
                 "Download from Google Cloud Console → APIs & Services → Credentials "
-                "→ OAuth 2.0 Client IDs → Download JSON → save as enterprise_ai/credentials/google_credentials.json"
+                "→ OAuth 2.0 Client IDs → Download JSON → save as Backend/credentials/google_credentials.json"
             ),
         )
 

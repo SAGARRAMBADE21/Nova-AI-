@@ -126,8 +126,8 @@ No third-party SSO required for company users. Clerk is used only for developer/
 ### 1 — Clone & Install
 
 ```bash
-git clone https://github.com/SAGARRAMBADE21/Nova-AI-.git
-cd Nova-AI-/enterprise_ai
+git clone https://github.com/SAGARRAMBADE21/Nova-AI-.git QueryMind
+cd QueryMind/Backend
 pip install -r requirements.txt
 ```
 
@@ -289,8 +289,8 @@ curl -X POST http://localhost:8000/chat \
 
 ## Project Structure
 
-```
-enterprise_ai/
+``` 
+Backend/
 │
 ├── api/
 │   └── server.py              API endpoints + unified auth dependency

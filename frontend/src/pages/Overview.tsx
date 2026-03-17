@@ -128,8 +128,8 @@ const Overview = () => {
           <div className="flex items-start space-x-4 p-4 border-b border-brand-border last:border-0 hover:bg-brand-lightBg/50 transition-colors rounded-xl">
             <div className="bg-green-100 p-2 rounded-full"><ShieldCheck className="w-4 h-4 text-green-600" /></div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-brand-charcoal">Security layer active <span className="font-normal text-brand-grayBody">— Lakera Guard running</span></p>
-              <p className="text-xs text-gray-400 mt-0.5">All queries are scanned for threats</p>
+              <p className="text-sm font-semibold text-brand-charcoal">Security layer active <span className="font-normal text-brand-grayBody">for all queries</span></p>
+              <p className="text-xs text-gray-400 mt-0.5">Requests are monitored and protected by the backend.</p>
             </div>
           </div>
         </div>

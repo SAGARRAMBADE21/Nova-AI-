@@ -147,7 +147,7 @@ const Tools = () => {
 
   const handleDisconnect = () => {
     if (!confirm('Disconnect Google Workspace?')) return;
-    alert('Delete enterprise_ai/credentials/google_token.json and restart the backend to disconnect.');
+    alert('Delete Backend/credentials/google_token.json and restart the backend to disconnect.');
   };
 
   const checkHealth = async () => {
@@ -359,7 +359,7 @@ const Tools = () => {
             <li>Enable: Gmail API, Drive API, Docs API, Sheets API, Calendar API</li>
             <li>Go to <b>APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID</b></li>
             <li>Add redirect URI: <code className="bg-amber-100 px-1 rounded">http://localhost:8000/tools/callback/google</code></li>
-            <li>Download JSON → save as <code className="bg-amber-100 px-1 rounded">enterprise_ai/credentials/google_credentials.json</code></li>
+            <li>Download JSON → save as <code className="bg-amber-100 px-1 rounded">Backend/credentials/google_credentials.json</code></li>
             <li>Click <b>Connect Google Workspace</b> above</li>
           </ol>
         </div>
