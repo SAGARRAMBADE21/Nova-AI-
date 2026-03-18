@@ -152,19 +152,21 @@ class ValidationAgent(BaseAgent):
                 f"[{self.name}] Conflicts: {ctx.retrieval.conflicts}"
             )
 
-        # Trigger HITL/Warning when confidence is not HIGH
-        if ctx.retrieval.confidence != ConfidenceLevel.HIGH:
-            ctx.hitl_required = True
-            
-            reason_msg = "Non-high confidence retrieval."
-            if self._is_sensitive(ctx.query):
-                reason_msg = "Sensitive query with non-high confidence retrieval."
+        # Trigger HITL/Warning if confidence is not HIGH
+        # Bypass for ADMIN or for non-sensitive data with MEDIUM confidence
+        is_admin = ctx.user_role == Role.ADMIN
+        is_sensitive = self._is_sensitive(ctx.query)
+        low_confidence = ctx.retrieval.confidence == ConfidenceLevel.LOW
+        
+        if not is_admin:
+            # Rule: Always block LOW confidence. 
+            # Rule: Block MEDIUM confidence only if sensitive.
+            if low_confidence or (is_sensitive and ctx.retrieval.confidence != ConfidenceLevel.HIGH):
+                ctx.hitl_required = True
                 
-            ctx.hitl_reason = (
-                f"{reason_msg} "
-                f"Conflicts: {ctx.retrieval.conflicts or 'None'}"
-            )
-            logger.info(f"[{self.name}] HITL triggered: {reason_msg}")
+                reason_msg = "Low confidence retrieval." if low_confidence else "Sensitive query with medium confidence."
+                ctx.hitl_reason = f"{reason_msg} Conflicts: {ctx.retrieval.conflicts or 'None'}"
+                logger.info(f"[{self.name}] HITL triggered: {reason_msg}")
 
         ctx.validated = True
         return ctx
@@ -235,7 +237,7 @@ class ToolAgent(BaseAgent):
                     "status":           "pending",
                 })
 
-                if requires_hitl:
+                if requires_hitl and ctx.user_role != Role.ADMIN:
                     ctx.hitl_required = True
                     ctx.hitl_reason   = (
                         f"High-risk action detected: {plugin}.{action}"

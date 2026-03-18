@@ -3,7 +3,7 @@
  * All calls go through here so auth headers are automatically attached.
  */
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8001';
 
 function getToken(): string | null {
   return localStorage.getItem('nova_token');

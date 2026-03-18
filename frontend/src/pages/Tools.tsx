@@ -87,7 +87,7 @@ interface ToolAction { name: string; description: string }
 interface Tool       { plugin: string; actions: ToolAction[] }
 interface HealthStatus { [key: string]: string }
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8001';
 
 // ── Component ─────────────────────────────────────────────────────────────
 
@@ -373,7 +373,7 @@ const Tools = () => {
             <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="underline font-bold">Google Cloud Console</a> and create or select a project</li>
             <li>Enable: Gmail API, Drive API, Docs API, Sheets API, Calendar API</li>
             <li>Go to <b>APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID</b></li>
-            <li>Add redirect URI: <code className="bg-amber-100 px-1 rounded">http://localhost:8000/tools/callback/google</code></li>
+            <li>Add redirect URI: <code className="bg-amber-100 px-1 rounded">http://localhost:8001/tools/callback/google</code></li>
             <li>Download JSON → save as <code className="bg-amber-100 px-1 rounded">enterprise_ai/credentials/google_credentials.json</code></li>
             <li>Click <b>Connect Google Workspace</b> above</li>
           </ol>

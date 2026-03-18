@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { FileText, ShieldCheck, UploadCloud, X } from 'lucide-react';
-import { uploadDocuments, listDocuments, type Document } from '@/lib/api';
+import { uploadDocument, listDocuments, type Document } from '@/lib/api';
 
 const SUPPORTED = ['.pdf', '.docx', '.xlsx', '.csv', '.txt', '.json', '.xml', '.md'];
 
@@ -91,15 +91,15 @@ const Documents = () => {
     const failed: string[] = [];
 
     try {
-      const response = await uploadDocuments(files, category || 'general', dbType);
-      setUploadProgress({ done: files.length, total: files.length });
-
-      for (const item of response.results) {
-        if (item.success) {
-          succeeded.push(item.filename);
-        } else {
-          failed.push(item.filename);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        try {
+          await uploadDocument(file, category || 'general', dbType);
+          succeeded.push(file.name);
+        } catch {
+          failed.push(file.name);
         }
+        setUploadProgress({ done: i + 1, total: files.length });
       }
 
       if (failed.length === 0) {

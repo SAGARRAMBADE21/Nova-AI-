@@ -10,6 +10,7 @@ import os
 import logging
 import hashlib
 import secrets as _secrets
+import string
 from datetime import datetime
 from typing import Optional, List
 from dotenv import load_dotenv
@@ -54,6 +55,7 @@ class TenantManager:
         try:
             self.companies.create_index("tenant_id",  unique=True)
             self.companies.create_index("join_code",  unique=True)
+            self.companies.create_index("join_code_normalized", unique=True, sparse=True)
             self.users.create_index(
                 [("tenant_id", 1), ("email", 1)], unique=True
             )
@@ -62,17 +64,24 @@ class TenantManager:
 
     # ── Company ───────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _normalize_join_code(join_code: str) -> str:
+        return "".join(ch for ch in (join_code or "").upper() if ch.isalnum())
+
     def create_company(self, company_name: str,
                        admin_email: str, tenant_id: str) -> dict:
         """Create a new company workspace and return its join code."""
-        import secrets
-        join_code = secrets.token_urlsafe(8).upper()[:12]
+        # Keep join codes strictly alphanumeric to avoid copy/paste confusion
+        # with legacy URL-safe characters like '-' and '_'.
+        alphabet = string.ascii_uppercase + string.digits
+        join_code = "".join(_secrets.choice(alphabet) for _ in range(12))
 
         company = {
             "tenant_id":    tenant_id,
             "company_name": company_name,
             "admin_email":  admin_email,
             "join_code":    join_code,
+            "join_code_normalized": self._normalize_join_code(join_code),
             "created_at":   datetime.utcnow().isoformat(),
             "status":       "active",
         }
@@ -90,9 +99,29 @@ class TenantManager:
                 "company_name": company_name}
 
     def get_company_by_code(self, join_code: str) -> Optional[dict]:
-        return self.companies.find_one(
-            {"join_code": join_code.upper()}, {"_id": 0}
+        raw_code = (join_code or "").strip().upper()
+        normalized = self._normalize_join_code(raw_code)
+        if not normalized:
+            return None
+
+        company = self.companies.find_one(
+            {
+                "$or": [
+                    {"join_code": raw_code},
+                    {"join_code_normalized": normalized},
+                ]
+            },
+            {"_id": 0},
         )
+        if company:
+            return company
+
+        # Legacy fallback: old data may not have join_code_normalized.
+        for legacy_company in self.companies.find({}, {"_id": 0}):
+            legacy_code = self._normalize_join_code(legacy_company.get("join_code", ""))
+            if legacy_code == normalized:
+                return legacy_company
+        return None
 
     def get_company_by_tenant_id(self, tenant_id: str) -> Optional[dict]:
         return self.companies.find_one({"tenant_id": tenant_id}, {"_id": 0})
@@ -303,6 +332,14 @@ class TenantVectorStore:
         )
         return response.data[0].embedding
 
+    def _embed_batch(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings for multiple texts in a single API call."""
+        model     = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+        truncated = [t[:8000] for t in texts]
+        response  = self.openai.embeddings.create(input=truncated, model=model)
+        # API returns items in the same order as input
+        return [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+
     # ── Write ─────────────────────────────────────────────────────────────
 
     def add_document(self, tenant_id: str, content: str,
@@ -342,6 +379,51 @@ class TenantVectorStore:
             f"| db_type={db_type} | source={source}"
         )
         return doc_id
+
+    def add_documents_batch(self, tenant_id: str, chunks: List[str],
+                            source: str, timestamp: str,
+                            category: str = "general",
+                            db_type: str  = "public") -> List[str]:
+        """
+        Embed all chunks in one API call then bulk-upsert into MongoDB.
+        Much faster than calling add_document() in a loop.
+        """
+        from pymongo import ReplaceOne
+
+        try:
+            embeddings = self._embed_batch(chunks)
+        except Exception as e:
+            logger.error(f"[TenantVectorStore] Batch embedding error: {e}")
+            embeddings = [[0.0] * self.EMBEDDING_DIM] * len(chunks)
+
+        ops     = []
+        doc_ids = []
+        now     = datetime.utcnow().isoformat()
+        for content, embedding in zip(chunks, embeddings):
+            doc_id = hashlib.md5(
+                f"{tenant_id}{source}{timestamp}{content[:50]}".encode()
+            ).hexdigest()
+            doc_ids.append(doc_id)
+            document = {
+                "_id":         doc_id,
+                "tenant_id":   tenant_id,
+                "db_type":     db_type,
+                "content":     content,
+                "source":      source,
+                "timestamp":   timestamp,
+                "category":    category,
+                "embedding":   embedding,
+                "ingested_at": now,
+            }
+            ops.append(ReplaceOne({"_id": doc_id}, document, upsert=True))
+
+        if ops:
+            self.col.bulk_write(ops, ordered=False)
+            logger.info(
+                f"[TenantVectorStore] Bulk stored {len(ops)} chunks | "
+                f"tenant={tenant_id} | db_type={db_type} | source={source}"
+            )
+        return doc_ids
 
     # ── Read ──────────────────────────────────────────────────────────────
 

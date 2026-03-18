@@ -82,15 +82,14 @@ class DataIngestionPipeline:
         logger.info(
             f"[Ingestion] Routing to {db_label} | db_type={db_type}"
         )
-        for chunk in chunks:
-            store.add_document(
-                tenant_id = tenant_id,
-                content   = chunk,
-                source    = source_name,
-                timestamp = timestamp,
-                category  = category,
-                db_type   = db_type,
-            )
+        store.add_documents_batch(
+            tenant_id = tenant_id,
+            chunks    = chunks,
+            source    = source_name,
+            timestamp = timestamp,
+            category  = category,
+            db_type   = db_type,
+        )
 
         # 4. Update knowledge graph
         self.knowledge_graph.update_from_document(content, source_name)

@@ -360,17 +360,26 @@ class EnterpriseAIAssistant:
         return openai_tools
 
     def _should_skip_retrieval(self, user_prompt: str) -> bool:
-        """Return True for obvious general-knowledge questions that do not need RAG."""
+        """
+        Return True ONLY for queries that are 100% certain to be about general
+        world knowledge unrelated to any company documents.
+
+        Key principle: queries like "what is X" could be asking about a company
+        product, person, or document — so we should NOT skip retrieval for them.
+        We err strongly on the side of ALWAYS retrieving; skipping is rare.
+        """
         normalized = " ".join(user_prompt.lower().split())
         if not normalized:
             return False
 
+        # NEVER skip if there's any hint it's company-related
         company_hints = (
             "our ", "my team", "my company", "company", "workspace",
             "tenant", "policy", "handbook", "payroll", "leave",
             "pto", "benefits", "employee", "manager", "admin",
             "report", "revenue", "document", "knowledge base",
             "confidential", "private", "uploaded", "sop", "quarter",
+            "annual", "salary", "product", "customer", "invoice",
         )
         action_hints = (
             "send email", "email to", "draft mail", "create doc",
@@ -378,22 +387,32 @@ class EnterpriseAIAssistant:
             "share file", "push data", "update row", "schedule",
             "create event", "remind me", "meet link", "video call",
         )
-        general_prefixes = (
-            "what is", "who is", "who are", "when is", "where is",
-            "why is", "how does", "how do", "explain", "define",
-            "tell me about", "did you know about",
-        )
-
-        if "http://" in normalized or "https://" in normalized:
-            return False
         if any(hint in normalized for hint in company_hints):
             return False
         if any(hint in normalized for hint in action_hints):
             return False
-        if normalized.startswith(general_prefixes):
+        if "http://" in normalized or "https://" in normalized:
+            return False
+
+        # Only skip for explicit greetings or very short trivial queries
+        greetings = ("hi", "hello", "hey", "thanks", "thank you", "bye", "good morning", "good night")
+        if normalized.strip() in greetings:
             return True
 
-        return len(normalized.split()) <= 4
+        # Only skip for clearly generic CS/STEM topics that can never be company data
+        # (extremely conservative allowlist)
+        generic_cs_patterns = (
+            "what is python", "what is javascript", "what is kubernetes",
+            "what is docker", "what is machine learning", "what is ai",
+            "what is rest api", "what is sql", "what is git", "what is linux",
+            "explain python", "explain javascript", "explain machine learning",
+            "who invented", "what year was", "history of the",
+        )
+        if any(normalized.startswith(p) for p in generic_cs_patterns):
+            return True
+
+        # Default: ALWAYS try the knowledge base
+        return False
 
     # ── Main chat interface ───────────────────────────────────────────────
 

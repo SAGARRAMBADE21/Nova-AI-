@@ -55,7 +55,7 @@ interface Session {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8001';
 
 const confidenceColor = (c?: string) => {
   if (c === 'HIGH')   return 'bg-green-100 text-green-700';
@@ -105,25 +105,39 @@ const inlineMarkdown = (text: string): React.ReactNode => {
   });
 };
 
-// ── Storage keys ─────────────────────────────────────────────────────────
+// ── Storage keys (user-scoped local cache only) ──────────────────────────
 
-const STORAGE_SESSIONS_KEY   = 'nova_chat_sessions';
-const STORAGE_ACTIVE_KEY     = 'nova_chat_active_session';
-
-// ── Component ────────────────────────────────────────────────────────────
+// IMPORTANT: key is scoped to the logged-in user's email so different users
+// on the same browser never share sessions. The source of truth is MongoDB.
+const getStorageKey = (email: string) =>
+  email ? `nova_chat_sessions_${email}` : 'nova_chat_sessions_guest';
+const getActiveKey  = (email: string) =>
+  email ? `nova_chat_active_${email}` : 'nova_chat_active_guest';
 
 const Chat = () => {
-  const [sessions, setSessions] = useState<Session[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_SESSIONS_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
-    return localStorage.getItem(STORAGE_ACTIVE_KEY) ?? null;
-  });
+  const navigate = useNavigate();
+  const userEmail   = localStorage.getItem('nova_email')   ?? '';
+  const userRole    = localStorage.getItem('nova_role')    ?? 'employee';
+  const userCompany = localStorage.getItem('nova_company') ?? 'Your Workspace';
+  const token       = localStorage.getItem('nova_token')   ?? '';
+  const initials    = userEmail ? userEmail.slice(0, 2).toUpperCase() : 'ME';
+
+  // Wipe the old SHARED localStorage key to prevent data leaks from before this fix
+  useEffect(() => {
+    localStorage.removeItem('nova_chat_sessions');
+    localStorage.removeItem('nova_chat_active_session');
+  }, []);
+
+  const SESSIONS_KEY = getStorageKey(userEmail);
+  const ACTIVE_KEY   = getActiveKey(userEmail);
+
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(
+    () => localStorage.getItem(ACTIVE_KEY) ?? null
+  );
   const [input, setInput]               = useState('');
   const [isConfidential, setIsConfidential] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   // Connectors state
   const [connectorsOpen, setConnectorsOpen] = useState(true);
@@ -131,13 +145,6 @@ const Chat = () => {
   const [connecting, setConnecting]         = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
-
-  const userEmail   = localStorage.getItem('nova_email')   ?? '';
-  const userRole    = localStorage.getItem('nova_role')    ?? 'employee';
-  const userCompany = localStorage.getItem('nova_company') ?? 'Your Workspace';
-  const token       = localStorage.getItem('nova_token')   ?? '';
-  const initials    = userEmail ? userEmail.slice(0, 2).toUpperCase() : 'ME';
 
   const activeSession = sessions.find(s => s.id === activeSessionId) ?? null;
   const messages      = activeSession?.messages ?? [];
@@ -146,6 +153,56 @@ const Chat = () => {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }), [token]);
+
+  // ── Load sessions from MongoDB on mount ──────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      setLoadingHistory(true);
+      try {
+        const res = await fetch(`${BASE}/chat-sessions`, { headers: getHeaders() });
+        if (res.ok) {
+          const data = await res.json();
+          const fetched: Session[] = (data.sessions ?? []).map((s: any) => ({
+            id:        s.session_id,
+            title:     s.title,
+            messages:  s.messages ?? [],
+            history:   s.history  ?? [],
+            createdAt: s.updated_at ? new Date(s.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+          }));
+          setSessions(fetched);
+          // Also cache locally per-user
+          localStorage.setItem(SESSIONS_KEY, JSON.stringify(fetched));
+        } else {
+          // Fallback: use per-user local cache if API fails
+          const cached = localStorage.getItem(SESSIONS_KEY);
+          if (cached) setSessions(JSON.parse(cached));
+        }
+      } catch {
+        const cached = localStorage.getItem(SESSIONS_KEY);
+        if (cached) setSessions(JSON.parse(cached));
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // ── Save a single session to MongoDB ─────────────────────────────────────
+  const persistSession = useCallback(async (session: Session) => {
+    try {
+      await fetch(`${BASE}/chat-sessions`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          session_id: session.id,
+          title:      session.title,
+          messages:   session.messages,
+          history:    session.history,
+        }),
+      });
+    } catch { /* silent — local state is still correct */ }
+  }, [getHeaders]);
 
   // Check Google connection status on mount
   useEffect(() => {
@@ -158,16 +215,16 @@ const Chat = () => {
     check();
   }, [getHeaders]);
 
-  // ── Persist sessions to localStorage ────────────────────────────────────
+  // ── Update per-user local cache when sessions change ─────────────────────
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_SESSIONS_KEY, JSON.stringify(sessions)); }
-    catch { /* quota exceeded — silently ignore */ }
-  }, [sessions]);
+    if (!loadingHistory)
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+  }, [sessions, SESSIONS_KEY, loadingHistory]);
 
   useEffect(() => {
-    if (activeSessionId) localStorage.setItem(STORAGE_ACTIVE_KEY, activeSessionId);
-    else localStorage.removeItem(STORAGE_ACTIVE_KEY);
-  }, [activeSessionId]);
+    if (activeSessionId) localStorage.setItem(ACTIVE_KEY, activeSessionId);
+    else localStorage.removeItem(ACTIVE_KEY);
+  }, [activeSessionId, ACTIVE_KEY]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -184,7 +241,8 @@ const Chat = () => {
   };
 
   const handleLogout = () => {
-    ['nova_token','nova_role','nova_company','nova_email', STORAGE_SESSIONS_KEY, STORAGE_ACTIVE_KEY].forEach(k => localStorage.removeItem(k));
+    // Clear only this user's keys, not others'
+    [SESSIONS_KEY, ACTIVE_KEY, 'nova_token','nova_role','nova_company','nova_email'].forEach(k => localStorage.removeItem(k));
     navigate('/login');
   };
 
@@ -225,6 +283,7 @@ const Chat = () => {
     const typingMsg: Message = { id: typingId, type: 'assistant', text: '', time: 'Now', isTyping: true };
 
     let currentHistory: { role: string; content: string }[] = [];
+    let updatedSession: Session | null = null;
     setSessions(prev => prev.map(s => {
       if (s.id !== sessionId) return s;
       if (s.messages.length === 0 && s.title === 'New Chat') s = { ...s, title: prompt.slice(0, 40) };
@@ -260,8 +319,13 @@ const Chat = () => {
           text: cleanText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           sources, confidence,
         };
-        return { ...s, messages: [...msgs, assistantMsg], history: newHistory };
+        updatedSession = { ...s, messages: [...msgs, assistantMsg], history: newHistory };
+        return updatedSession;
       }));
+
+      // Persist to MongoDB after update
+      if (updatedSession) persistSession(updatedSession);
+
     } catch (err) {
       setSessions(prev => prev.map(s => {
         if (s.id !== sessionId) return s;
@@ -309,7 +373,9 @@ const Chat = () => {
         {/* Chat History */}
         <div className="flex-1 overflow-y-auto px-3 custom-scrollbar">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2 py-2">Chats</div>
-          {sessions.length === 0 ? (
+          {loadingHistory ? (
+            <p className="text-xs text-gray-400 px-2 flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Loading chats...</p>
+          ) : sessions.length === 0 ? (
             <p className="text-xs text-gray-400 px-2">No chats yet.</p>
           ) : sessions.map(session => (
             <div
@@ -325,7 +391,17 @@ const Chat = () => {
               </div>
               <button
                 className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity shrink-0"
-                onClick={e => { e.stopPropagation(); setSessions(prev => prev.filter(s => s.id !== session.id)); if (activeSessionId === session.id) setActiveSessionId(null); }}
+                onClick={async e => {
+                  e.stopPropagation();
+                  // Delete from MongoDB
+                  try {
+                    await fetch(`${BASE}/chat-sessions/${session.id}`, {
+                      method: 'DELETE', headers: getHeaders()
+                    });
+                  } catch { /* silent */ }
+                  setSessions(prev => prev.filter(s => s.id !== session.id));
+                  if (activeSessionId === session.id) setActiveSessionId(null);
+                }}
               >
                 <X size={13} />
               </button>
@@ -424,10 +500,13 @@ const Chat = () => {
             <h1 className="text-sm font-bold text-brand-charcoal">AI ASSISTANT</h1>
             <p className="text-[10px] text-gray-400">{userCompany}</p>
           </div>
-          <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-full border border-brand-border">
-            <button onClick={() => setIsConfidential(false)} className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-all ${!isConfidential ? 'bg-white shadow-sm text-brand-charcoal' : 'text-gray-400'}`}>Public</button>
-            <button onClick={() => setIsConfidential(true)}  className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-all ${ isConfidential ? 'bg-white shadow-sm text-brand-charcoal' : 'text-gray-400'}`}>Confidential</button>
-          </div>
+          {userRole !== 'employee' && (
+            <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-full border border-brand-border">
+              <button onClick={() => setIsConfidential(false)} className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-all ${!isConfidential ? 'bg-white shadow-sm text-brand-charcoal' : 'text-gray-400'}`}>Public</button>
+              <button onClick={() => setIsConfidential(true)}  className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-all ${ isConfidential ? 'bg-white shadow-sm text-brand-charcoal' : 'text-gray-400'}`}>Confidential</button>
+            </div>
+          )}
+
         </header>
 
         {/* Messages */}
@@ -495,7 +574,8 @@ const Chat = () => {
           <div className="max-w-3xl mx-auto">
             <div className="relative bg-white border-2 border-brand-border rounded-[24px] shadow-lg focus-within:border-brand-charcoal transition-all p-2">
               <textarea
-                className="w-full border-0 focus:ring-0 resize-none px-4 py-3 text-brand-charcoal placeholder:text-gray-400 bg-transparent min-h-[52px] max-h-[180px] outline-none text-sm"
+                className="w-full border-0 focus:ring-0 resize-none px-4 py-3 placeholder:text-gray-400 bg-transparent min-h-[52px] max-h-[180px] outline-none text-sm"
+                style={{ color: '#1A1A1A', caretColor: '#1A1A1A' }}
                 placeholder={isConnected ? "Ask ARIA anything — or ask it to search Gmail, Drive, Docs..." : "Ask ARIA anything about your company..."}
                 rows={1}
                 value={input}

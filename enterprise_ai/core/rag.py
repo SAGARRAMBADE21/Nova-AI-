@@ -111,7 +111,7 @@ class SelfCorrectingRAG:
     Assigns confidence score — LOW confidence triggers HITL.
     """
 
-    RELEVANCE_THRESHOLD  = 0.65   # lowered from 0.7 — captures more valid chunks
+    RELEVANCE_THRESHOLD  = 0.50   # lowered: captures more valid chunks from Atlas
     MAX_REFRAME_ATTEMPTS = 3
 
     def __init__(self, public_store, private_store,
@@ -245,11 +245,12 @@ class SelfCorrectingRAG:
             return ConfidenceLevel.LOW
         avg_score = sum(c.score for c in chunks) / len(chunks)
         if conflicts:
-            avg_score *= 0.8
-        # Require multiple chunks for HIGH — single chunk is not reliable enough
-        if avg_score >= 0.75 and len(chunks) >= 2:
+            avg_score *= 0.85  # small penalty for conflicts, not as harsh
+        # HIGH: avg score >= 0.72 with at least 1 chunk
+        if avg_score >= 0.72 and len(chunks) >= 1:
             return ConfidenceLevel.HIGH
-        elif avg_score >= 0.55 or (avg_score >= 0.75 and len(chunks) == 1):
+        # MEDIUM: avg score >= 0.45 
+        elif avg_score >= 0.45:
             return ConfidenceLevel.MEDIUM
         return ConfidenceLevel.LOW
 

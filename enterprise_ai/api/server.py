@@ -85,7 +85,8 @@ def _resolve_google_path(env_key: str, filename: str) -> str:
 # ── CORS — allow Vite dev server ──────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173",
+                   "http://localhost:5174", "http://127.0.0.1:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -246,8 +247,8 @@ async def register(request: RegisterRequest):
     # 1. Verify join code
     company = assistant.tenant_manager.get_company_by_code(request.join_code)
     if not company:
-        raise HTTPException(status_code=404,
-                            detail="Invalid join code.")
+        raise HTTPException(status_code=400,
+                            detail="Invalid join code. Please verify it or create a new workspace.")
 
     # 2. Check the email was invited
     user = assistant.tenant_manager.get_user(company["tenant_id"], email)
@@ -286,7 +287,7 @@ async def join_workspace(request: JoinRequest):
     # 1. Find company by join code
     company = assistant.tenant_manager.get_company_by_code(request.join_code)
     if not company:
-        raise HTTPException(status_code=404,
+        raise HTTPException(status_code=400,
                             detail="Invalid join code. Check with your admin.")
 
     # 2. Check user is invited / registered
@@ -366,6 +367,79 @@ async def chat(
         sources    = sources,
         tools_used = tools_used,
     )
+
+
+# ── Chat Session Storage (per-user, MongoDB-backed) ───────────────────────
+
+class SaveSessionRequest(BaseModel):
+    session_id: str
+    title:      str
+    messages:   list       # [{id, type, text, time, sources?, confidence?}]
+    history:    list = []  # [{role, content}] for LLM multi-turn memory
+
+@app.get("/chat-sessions")
+async def get_chat_sessions(
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """
+    Return all chat sessions for the authenticated user (scoped by user_id + tenant_id).
+    No user can see another user's chats.
+    """
+    col = assistant._mongo_client[
+        os.getenv("MONGODB_DB_NAME", "nova_ai")
+    ]["chat_sessions"]
+    sessions = list(col.find(
+        {"user_id": token.user_id, "tenant_id": token.tenant_id},
+        {"_id": 0}
+    ).sort("updated_at", -1).limit(100))
+    return {"sessions": sessions}
+
+
+@app.post("/chat-sessions")
+async def save_chat_session(
+    request: SaveSessionRequest,
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """
+    Upsert a single chat session for the authenticated user.
+    Overwrites any existing session with the same session_id.
+    """
+    from datetime import datetime
+    col = assistant._mongo_client[
+        os.getenv("MONGODB_DB_NAME", "nova_ai")
+    ]["chat_sessions"]
+    doc = {
+        "session_id": request.session_id,
+        "user_id":    token.user_id,
+        "tenant_id":  token.tenant_id,
+        "title":      request.title,
+        "messages":   request.messages,
+        "history":    request.history,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    col.replace_one(
+        {"session_id": request.session_id, "user_id": token.user_id},
+        doc,
+        upsert=True,
+    )
+    return {"status": "saved", "session_id": request.session_id}
+
+
+@app.delete("/chat-sessions/{session_id}")
+async def delete_chat_session(
+    session_id: str,
+    token: ClerkTokenPayload = Depends(get_current_user),
+):
+    """Delete a specific chat session. Only the owner can delete their own session."""
+    col = assistant._mongo_client[
+        os.getenv("MONGODB_DB_NAME", "nova_ai")
+    ]["chat_sessions"]
+    result = col.delete_one(
+        {"session_id": session_id, "user_id": token.user_id}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Session not found or not owned by you.")
+    return {"status": "deleted", "session_id": session_id}
 
 
 @app.post("/ingest")
@@ -779,9 +853,9 @@ async def connect_google(
 
     # For installed apps, we use the loopback redirect
     REDIRECT_URI = (
-        "http://localhost:8000/tools/callback/google"
+        "http://localhost:8001/tools/callback/google"
         if cred_type == "web"
-        else os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8000/tools/callback/google")
+        else os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8001/tools/callback/google")
     )
 
     try:
@@ -816,7 +890,7 @@ async def google_oauth_callback(
 
     creds_file = _resolve_google_path("GOOGLE_CREDENTIALS_FILE", "google_credentials.json")
     token_file = _resolve_google_path("GOOGLE_TOKEN_FILE", "google_token.json")
-    REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8000/tools/callback/google")
+    REDIRECT_URI = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8001/tools/callback/google")
 
     if error:
         msg = error_description or error
@@ -916,4 +990,4 @@ async def execute_tool(
 # ── Entry Point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
