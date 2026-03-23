@@ -146,7 +146,9 @@ const Tools = () => {
   };
 
   const handleDisconnect = async () => {
+  const handleDisconnect = async () => {
     if (!confirm('Disconnect Google Workspace?')) return;
+    alert('Delete Backend/credentials/google_token.json and restart the backend to disconnect.');
     setConnectLoading(true);
     try {
       const res = await fetch(`${BASE}/tools/disconnect/google`, {
@@ -277,7 +279,9 @@ const Tools = () => {
               </button>
               <button
                 className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-500 py-2 px-4 rounded-full font-bold text-sm hover:bg-red-100 transition-all disabled:opacity-50"
+                className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-500 py-2 px-4 rounded-full font-bold text-sm hover:bg-red-100 transition-all disabled:opacity-50"
                 onClick={handleDisconnect}
+                disabled={connectLoading}
                 disabled={connectLoading}
               >
                 Disconnect
@@ -373,8 +377,13 @@ const Tools = () => {
             <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="underline font-bold">Google Cloud Console</a> and create or select a project</li>
             <li>Enable: Gmail API, Drive API, Docs API, Sheets API, Calendar API</li>
             <li>Go to <b>APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID</b></li>
+<<<<<<< HEAD
             <li>Add redirect URI: <code className="bg-amber-100 px-1 rounded">http://localhost:8001/tools/callback/google</code></li>
             <li>Download JSON → save as <code className="bg-amber-100 px-1 rounded">enterprise_ai/credentials/google_credentials.json</code></li>
+=======
+            <li>Add redirect URI: <code className="bg-amber-100 px-1 rounded">http://localhost:8000/tools/callback/google</code></li>
+            <li>Download JSON → save as <code className="bg-amber-100 px-1 rounded">Backend/credentials/google_credentials.json</code></li>
+>>>>>>> a6ebb207d1cbb22df4797f72bcc6b2a782263ec4
             <li>Click <b>Connect Google Workspace</b> above</li>
           </ol>
         </div>

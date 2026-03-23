@@ -5,9 +5,9 @@ Usage:
   python get_codes.py --reset      # interactively reset a password
 """
 import sys
-sys.path.insert(0, 'enterprise_ai')
+sys.path.insert(0, 'Backend')
 from dotenv import load_dotenv
-load_dotenv('enterprise_ai/.env')
+load_dotenv('Backend/.env')
 from db.mongodb import get_mongodb_client
 
 client, db = get_mongodb_client()
