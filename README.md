@@ -377,14 +377,4 @@ Backend/
 
 ---
 
-## License
 
-MIT — see [LICENSE](LICENSE)
-
----
-
-<div align="center">
-<br />
-Built with ❤️ for enterprise teams who deserve better AI tools.
-<br /><br />
-</div>
